@@ -10,6 +10,8 @@
 
 #define VOLT_REF BIT0
 
+#define WIN_TIME 8
+
 /*
  * P1.1 through P1.5 are the microphone inputs MIC1 through MIC5
  *
@@ -18,13 +20,13 @@
 
 int virgin_flag;
 
-int mic_time[5];											//holds value of microphone
+int mic_time[5];									//holds value of microphone
 int mic_check;										//BITN in mic_check is for MICN+1. Determines which MIC has a time value
 int mic_num;										//determine which MIC is being used
 int mic_use;										//vector that determines mic being used
 
 int main(void) {
-    WDTCTL = WDTPW | WDTHOLD;	// Stop watchdog timer
+    WDTCTL = WDTPW | WDTHOLD;						// Stop watchdog timer
 	BCSCTL1 = CALBC1_16MHZ;
 	DCOCTL = CALDCO_16MHZ;
 	_enable_interrupts();
@@ -54,15 +56,17 @@ int main(void) {
     {
     	if(~mic_check & (MIC1 >> 1))
     	{
-    		mic_use = 1;
+    		mic_use = 0;
     		CACTL2 |= P2CA1;										//selects CA1
+    		__delay_cycles(WIN_TIME);
     		CACTL2 &= ~(P2CA1 + P2CA2 + P2CA3);						//clears control lines on multiplexer
     	}
 
     	if(~mic_check & (MIC2 >> 1))
 		{
-		mic_use = 2;
+    		mic_use = 1;
     		CACTL2 |= P2CA2;										//selects CA2
+    		__delay_cycles(WIN_TIME);
     		CACTL2 &= ~(P2CA1 + P2CA2 + P2CA3);						//clears control lines on multiplexer
 		}
     }
@@ -77,8 +81,6 @@ int main(void) {
 #pragma vector=COMPARATORA_VECTOR
 __interrupt void comp_isr (void)
 {
-	//Black Magic(TM): Shifts multiplexer control pins to 3 LSB then ands with 0x7 to leave only last 3 bits.
-	//A value of 1 is then shifted the number of those 3 bits to set the mic_check vector
 	mic_check |= 1 << mic_use;
 
 	if(virgin_flag)
