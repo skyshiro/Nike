@@ -28,9 +28,11 @@
  */
 
 int virgin_flag;
+int convert_flag;									//determines if ADC has converted value
 
 int mic_time[5];									//holds value of microphone
-int mic_check;										//BITN in mic_check is for MICN+1. Determines which MIC has a time value
+int mic_adc[5];
+int mic_check;										//BITN in mic_check is for MICN. Determines which MIC has a time value
 int mic_num;										//determine which MIC is being used
 int mic_use;										//vector that determines mic being used
 
@@ -43,12 +45,13 @@ int main(void) {
 	_enable_interrupts();
 
     virgin_flag = 1;
+    convert_flag = 1;
+
     mic_check = 0x00;
 
-    ADC10CTL1 |= INCH_2 + ADC10SSEL_2 + CONSEQ_3;
-    ADC10CTL0 |= ADC10IE + MSC + ADC10SHT_2;
+    ADC10CTL1 |= ADC10SSEL_2;
+    ADC10CTL0 |= ADC10IE /* + ADC10SHT_2 */;
     ADC10CTL0 |= ADC10ON;								//turn on the ADC and interrupts for it
-    ADC10CTL0 |= ENC + ADC10SC;
     //sweep microphone input
 
     //for 5 mic setup
@@ -57,6 +60,22 @@ int main(void) {
     //for 2 mic setup
     while(mic_check != 0x3)
     {
+    	if(~mic_check & MIC0)
+    	{
+    		mic_use = 0;
+    		ADC10CTL0 |= ADC10SC+ENC;
+    		while(convert_flag);
+    		convert_flag = 1;
+    	}
+    	if(~mic_check & MIC1)
+		{
+    		mic_use = 1;
+    		ADC10CTL1 |= INCH_1;
+			ADC10CTL0 |= ADC10SC+ENC;;
+			while(convert_flag);
+			convert_flag = 1;
+			ADC10CTL1 &= ~INCH_1;
+		}
 
     }
 
@@ -72,13 +91,15 @@ int main(void) {
 #pragma vector=ADC10_VECTOR
 __interrupt void adc_isr (void)
 {
-	//determine which mic was converted
+	convert_flag = 0;
 
-	mic_num = 0xF & (ADC10CTL1 >> 12);					//determine which microphone was converted
+	ADC10CTL0 &= ~ENC;									//turn off ENC bit so the input channel can be changed
+
+	mic_adc[mic_use] = ADC10MEM;
 
 	if(ADC10MEM > 1000)									//check is ADC value is close to rail
 	{
-		mic_check |= 1 << mic_num;
+		mic_check |= 1 << mic_use;
 
 		if(virgin_flag)
 		{
@@ -86,7 +107,7 @@ __interrupt void adc_isr (void)
 			TACTL = TASSEL_2 + MC_2;                  // SMCLK, continous mode @ 16MHz
 
 			virgin_flag = 0;
-			mic_time[mic_num] = 0;
+			mic_time[mic_use] = 0;
 		}
 		else
 		{
