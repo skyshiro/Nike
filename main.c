@@ -11,7 +11,7 @@
 //Voltage reference ~3V
 #define VOLT_REF BIT0
 
-#define WIN_TIME 2
+#define WIN_TIME 5
 
 /*
  * P1.1 through P1.5 are the microphone inputs MIC1 through MIC5
@@ -38,19 +38,16 @@ int main(void) {
     mic_check = 0x00;
 
     CACTL2 |= P2CA0;											//select reference voltage
-    CACTL2 &= ~(P2CA3 + P2CA2 + P2CA1);							//clears selection
+    CACTL2 |= P2CA3 + P2CA2 + P2CA1;							//switch to CA7 pin that's grounded to prevent floating pin
 
-    CACTL2 |= P2CA1;
-
-    CACTL1 |= CAON;
-    CACTL1 &= ~CAIFG;
-
-    CACTL1 |= CAIES + CAIE;
+    CACTL1 |= CAON + CAF;												//turn on comparator
+    CACTL1 &= ~CAIFG;											//clear interrupt flag because it accidentally triggers
+    CACTL1 |= CAIE + CAIES;										//enable comparator interrupts
 
     //sweep microphone input
 
     //for 5 mic setup
-    //while(!(mic_check & 0x1F))									//when all bits in mic_check vector are set, exit while loop to continue
+    //while(!(mic_check & 0x1F))								//when all bits in mic_check vector are set, exit while loop to continue
 
     //for 2 mic setup
     while(mic_check != 0x3)
@@ -58,17 +55,18 @@ int main(void) {
     	if(~mic_check & (MIC1 >> 1))
     	{
     		mic_use = 0;
-    		CACTL2 |= P2CA1;										//selects CA1
-    		__delay_cycles(WIN_TIME);
-    		CACTL2 &= ~(P2CA1 + P2CA2 + P2CA3);						//clears control lines on multiplexer
+    		CACTL2 &= ~(P2CA2 + P2CA3);							//selects CA1 from CA7 to prevent floating pin
+    		//__delay_cycles(WIN_TIME);
+    		CACTL2 |= P2CA1 + P2CA2 + P2CA3;					//switch to CA7, grounded input
+
     	}
 
     	if(~mic_check & (MIC2 >> 1))
 		{
     		mic_use = 1;
-    		CACTL2 |= P2CA2;									//selects CA2
-    		__delay_cycles(WIN_TIME);
-    		CACTL2 &= ~(P2CA1 + P2CA2 + P2CA3);						//clears control lines on multiplexer
+    		CACTL2 &= ~(P2CA1 + P2CA3);								//selects CA2 from CA7 to prevent floating pin
+    		//__delay_cycles(WIN_TIME);
+    		CACTL2 |= P2CA1 + P2CA2 + P2CA3;						//switch to CA7, grounded input
 		}
     }
 
@@ -97,5 +95,7 @@ __interrupt void comp_isr (void)
 		//mic_time[mic_use] = TAR-MIC_CAL;		//the value of the next microphone is the value of TAR
 		mic_time[mic_use] = TAR;
 	}
+
+	CACTL1 &= ~CAIFG;
 
 }
