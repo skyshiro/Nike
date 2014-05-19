@@ -8,9 +8,10 @@
 
 #define MIC_CAL 20
 
+//Voltage reference ~3V
 #define VOLT_REF BIT0
 
-#define WIN_TIME 8
+#define WIN_TIME 2
 
 /*
  * P1.1 through P1.5 are the microphone inputs MIC1 through MIC5
@@ -65,7 +66,7 @@ int main(void) {
     	if(~mic_check & (MIC2 >> 1))
 		{
     		mic_use = 1;
-    		CACTL2 |= P2CA2;										//selects CA2
+    		CACTL2 |= P2CA2;									//selects CA2
     		__delay_cycles(WIN_TIME);
     		CACTL2 &= ~(P2CA1 + P2CA2 + P2CA3);						//clears control lines on multiplexer
 		}
@@ -93,7 +94,8 @@ __interrupt void comp_isr (void)
 	}
 	else
 	{
-		mic_time[mic_use] = TAR-MIC_CAL;		//the value of the next microphone is the value of TAR
+		//mic_time[mic_use] = TAR-MIC_CAL;		//the value of the next microphone is the value of TAR
+		mic_time[mic_use] = TAR;
 	}
 
 }
