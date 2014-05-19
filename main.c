@@ -80,7 +80,7 @@ __interrupt void comp_isr (void)
 	//A value of 1 is then shifted the number of those 3 bits to set the mic_check vector
 	int mic_num =  0x7 & (CACTL2 >> 3);	//keeps track of which microphone caused the interrupt
 
-	mic_check |= mic_num;
+	mic_check |= 1 << mic_num;
 
 	if(virgin_flag)
 	{
