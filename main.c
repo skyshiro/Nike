@@ -21,6 +21,7 @@ int virgin_flag;
 int mic_time[5];											//holds value of microphone
 int mic_check;										//BITN in mic_check is for MICN+1. Determines which MIC has a time value
 int mic_num;										//determine which MIC is being used
+int mic_use;										//vector that determines mic being used
 
 int main(void) {
     WDTCTL = WDTPW | WDTHOLD;	// Stop watchdog timer
@@ -53,15 +54,15 @@ int main(void) {
     {
     	if(~mic_check & (MIC1 >> 1))
     	{
+    		mic_use = 1;
     		CACTL2 |= P2CA1;										//selects CA1
-    		__delay_cycles(3);
     		CACTL2 &= ~(P2CA1 + P2CA2 + P2CA3);						//clears control lines on multiplexer
     	}
 
     	if(~mic_check & (MIC2 >> 1))
 		{
+		mic_use = 2;
     		CACTL2 |= P2CA2;										//selects CA2
-    		__delay_cycles(3);
     		CACTL2 &= ~(P2CA1 + P2CA2 + P2CA3);						//clears control lines on multiplexer
 		}
     }
@@ -78,9 +79,7 @@ __interrupt void comp_isr (void)
 {
 	//Black Magic(TM): Shifts multiplexer control pins to 3 LSB then ands with 0x7 to leave only last 3 bits.
 	//A value of 1 is then shifted the number of those 3 bits to set the mic_check vector
-	int mic_num =  0x7 & (CACTL2 >> 3);	//keeps track of which microphone caused the interrupt
-
-	mic_check |= 1 << mic_num;
+	mic_check |= 1 << mic_use;
 
 	if(virgin_flag)
 	{
@@ -92,7 +91,7 @@ __interrupt void comp_isr (void)
 	}
 	else
 	{
-		mic_time[mic_num] = TAR-MIC_CAL;		//the value of the next microphone is the value of TAR
+		mic_time[mic_use] = TAR-MIC_CAL;		//the value of the next microphone is the value of TAR
 	}
 
 }
