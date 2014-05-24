@@ -12,8 +12,8 @@
 #define ADC_THRES 900
 #define WIN_TIME 5
 
-#define L10	.075
-#define L21	.075
+#define L10	.3
+#define L21	.3
 
 /*
  * P1.1 through P1.5 are the microphone inputs MIC0 through MIC4
@@ -95,7 +95,7 @@ int main(void) {
 		}
 
     }
-
+    test = abs(-2.0);
 
     ADC10CTL0 &= ~ADC10ON;										//turn off ADC when done filling with values
 
@@ -104,9 +104,9 @@ int main(void) {
 
     R_horz = L10 * ( 1 - ( (CD10 / L10)*(CD10 / L10)) ) + L21 * ( 1 - ( (CD21 / L21 ) * (CD21 / L21) ));
     R_horz = R_horz / ( 2 * ( ( CD21 / L21 ) - ( CD10 / L10 ) ) );
-    R_horz = R_horz * 100;	//convert to cm
+    //R_horz = R_horz * 100;	//convert to cm
 
-    B_horz = acos(( L10*L10 - 2*R_horz*CD21 - CD21*CD21) / ( 2*R_horz*L10 ))*180/3.14159;
+    B_horz = acos(( L10*L10 - 2*R_horz*CD21 - CD21*CD21) / ( (2*R_horz*L10) ))*180/3.14159;
 
     while(1);
 
