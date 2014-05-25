@@ -11,9 +11,9 @@
 #define MIC_CAL 20
 #define ADC_THRES 900
 #define WIN_TIME 5
+#define SAMPLE_AVG_COUNT 5 		//number of samples to avg
 
-#define L10	.3
-#define L21	.3
+#define ARRAY_LENGTH .3			//length between mic in meters
 
 /*
  * P1.1 through P1.5 are the microphone inputs MIC0 through MIC4
@@ -22,7 +22,7 @@
  *
  * ADC value of about 1020 will be rail
  *
- * CONSEQ_3 will convert selected channels continously
+ * CONSEQ_3 will convert selected channels continuously
  *
  * ADC10ON = 1
  *
@@ -34,18 +34,22 @@
 
 int virgin_flag;
 int convert_flag;									//determines if ADC has converted value
+int MIC0_virgin_flag;
+int MIC1_viring_flag;
+int MIC2_virgin_flag;
 
-int mic_time[5];									//holds value of microphone
+int mic_time[5][SAMPLE_AVG_COUNT];									//2d array, first dimension holds timing values from mic and second is for the multiple samples
 int mic_adc[5];
 int mic_check;										//BITN in mic_check is for MICN. Determines which MIC has a time value
 int mic_use;										//vector that determines mic being used
 
 int mic_adc[5];
 
-float test, CD10, CD21,R_horz,B_horz;
+float CD10[SAMPLE_AVG_COUNT], CD21[SAMPLE_AVG_COUNT],R_horz[SAMPLE_AVG_COUNT],B_horz[SAMPLE_AVG_COUNT];	//holy shit memory usage Batman!
+float R_horz_avg,B_horz_avg;
 
 int main(void) {
-
+	int i;
 
     WDTCTL = WDTPW | WDTHOLD;						// Stop watchdog timer
 	BCSCTL1 = CALBC1_16MHZ;
@@ -63,19 +67,19 @@ int main(void) {
     //sweep microphone input
 
     //for 5 mic setup
-    //while(!(mic_check & 0x1F))								//when all bits in mic_check vector are set, exit while loop to continue
+    //while(!(mic_check & 0x1F))						//when all bits in mic_check vector are set, exit while loop to continue
 
     //for 2 mic setup
-    while(mic_check != 0x7)
+    while(mic_check != 0x7FFF)							//every 5 bits is is dedicated to 5 samples from each mic. 0x755 = 15 bits
     {
-    	if(~mic_check & MIC0)
+    	if(~(mic_check & 0x1F))							//0x1F is 5 bits, when all 5 samples have been taken mic_check4:0 will be high
     	{
     		mic_use = 0;
     		ADC10CTL0 |= ADC10SC+ENC;
     		while(convert_flag);
     		convert_flag = 1;
     	}
-    	if(~mic_check & MIC1)
+    	if(~(mic_check & 0x3E0))
 		{
     		mic_use = 1;
     		ADC10CTL1 |= INCH_1;
@@ -84,7 +88,7 @@ int main(void) {
 			convert_flag = 1;
 			ADC10CTL1 &= ~INCH_1;
 		}
-    	if(~mic_check & MIC2)
+    	if(~(mic_check & 0x7C00))
 		{
 			mic_use = 2;
 			ADC10CTL1 |= INCH_2;
@@ -95,18 +99,30 @@ int main(void) {
 		}
 
     }
-    test = abs(-2.0);
 
     ADC10CTL0 &= ~ADC10ON;										//turn off ADC when done filling with values
 
-    CD10 = (mic_time[1]-mic_time[0])/4000.0*343/4000.0;
-    CD21 = (mic_time[2]-mic_time[1])/4000.0*343/4000.0;
+    R_horz_avg = 0.0;
+    B_horz_avg = 0.0;
 
-    R_horz = L10 * ( 1 - ( (CD10 / L10)*(CD10 / L10)) ) + L21 * ( 1 - ( (CD21 / L21 ) * (CD21 / L21) ));
-    R_horz = R_horz / ( 2 * ( ( CD21 / L21 ) - ( CD10 / L10 ) ) );
-    //R_horz = R_horz * 100;	//convert to cm
+    //INSERT LOOP TO CALCULATE RANGE AND BEARING FOR 5 SAMPLES
+    for(i=0; i<SAMPLE_AVG_COUNT; i++)
+    {
+        CD10[i] = (mic_time[1][i]-mic_time[0][i])/4000.0*343/4000.0;
+        CD21[i] = (mic_time[2][i]-mic_time[1][i])/4000.0*343/4000.0;
 
-    B_horz = acos(( L10*L10 - 2*R_horz*CD21 - CD21*CD21) / ( (2*R_horz*L10) ))*180/3.14159;
+        R_horz[i] = ARRAY_LENGTH * ( 1 - ( (CD10[i] / ARRAY_LENGTH) * (CD10[i] / ARRAY_LENGTH)) ) + ARRAY_LENGTH * ( 1 - ( (CD21 / ARRAY_LENGTH ) * (CD21[i] / ARRAY_LENGTH) ));
+        R_horz[i] = R_horz / ( 2 * ( ( CD21[i] / ARRAY_LENGTH ) - ( CD10[i] / ARRAY_LENGTH ) ) );
+        //R_horz = R_horz * 100;	//convert to cm
+
+        B_horz = acos(( ARRAY_LENGTH*ARRAY_LENGTH - 2*R_horz[i]*CD21 - CD21*CD21) / ( (2*R_horz[i]*ARRAY_LENGTH) ))*180/3.14159;
+
+        R_horz_avg += R_horz[i];
+        B_horz_ang += B_horz[i];
+    }
+
+    R_horz_avg = R_horz_avg / SAMPLE_AVG_COUNT;
+    B_horz_ang = B_horz_ang / SAMPLE_AVG_COUNT;
 
     while(1);
 
