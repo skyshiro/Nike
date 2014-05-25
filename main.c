@@ -30,6 +30,9 @@
  *
  * ENC = 1
  * ADC10SC = 1
+ *
+ * Takes 5 samples from each microphone then does radius/bearing calculation and averages the results
+ *
  */
 
 int virgin_flag;
