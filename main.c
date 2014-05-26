@@ -14,7 +14,8 @@
 
 #define ARRAY_LENGTH .3			//length between mic in meters
 
-/*
+/* Timer runs at 8MHz to avoid overflow. Timer is an integer from 0->2^16 while mic_time is a float from 0->2^15
+ *
  * P1.1 through P1.5 are the microphone inputs MIC0 through MIC4
  *
  * P1.0 will be the reference voltage
@@ -115,8 +116,8 @@ int main(void) {
     //INSERT LOOP TO CALCULATE RANGE AND BEARING FOR 5 SAMPLES
     for(i=0; i<SAMPLE_AVG_COUNT; i++)
     {
-        CD10[i] = (mic_time[1][i]-mic_time[0][i])/4000.0*343/4000.0;
-        CD21[i] = (mic_time[2][i]-mic_time[1][i])/4000.0*343/4000.0;
+        CD10[i] = (mic_time[1][i]-mic_time[0][i])/4000.0*343/2000.0;
+        CD21[i] = (mic_time[2][i]-mic_time[1][i])/4000.0*343/2000.0;
 
         R_horz[i] = ARRAY_LENGTH * ( 1 - ( (CD10[i] / ARRAY_LENGTH) * (CD10[i] / ARRAY_LENGTH)) ) + ARRAY_LENGTH * ( 1 - ( (CD21[i] / ARRAY_LENGTH ) * (CD21[i] / ARRAY_LENGTH) ));
         R_horz[i] = R_horz[i] / ( 2 * ( ( CD21[i] / ARRAY_LENGTH ) - ( CD10[i] / ARRAY_LENGTH ) ) );
@@ -152,7 +153,7 @@ __interrupt void adc_isr (void)
 		if(virgin_flag)
 		{
 			//turn on the timer
-			TACTL = TASSEL_2 + MC_2;                 // SMCLK, continous mode @ 16MHz
+			TACTL = TASSEL_2 + MC_2 + ID_1;                 // SMCLK, continous mode @ 16MHz
 
 			virgin_flag = 0;						//turn off flag so program doesn't repeat branch
 
@@ -194,6 +195,7 @@ __interrupt void adc_isr (void)
 				}
 			}
 		}
+
 		else
 		{
 			if(mic_use == 0)
@@ -204,7 +206,7 @@ __interrupt void adc_isr (void)
 				else
 				{
 					mic_check |= 1 << (MIC0_sample_count);
-					mic_time[mic_use][MIC0_sample_count] = TAR;
+					mic_time[mic_use][MIC0_sample_count] = (unsigned int)TAR;
 					MIC0_sample_count++;
 				}
 			}
@@ -216,7 +218,7 @@ __interrupt void adc_isr (void)
 				else
 				{
 					mic_check |= 1 << (MIC1_sample_count + 5);
-					mic_time[mic_use][MIC1_sample_count] = TAR;
+					mic_time[mic_use][MIC1_sample_count] = (unsigned int)TAR;
 					MIC1_sample_count++;
 				}
 			}
@@ -228,7 +230,7 @@ __interrupt void adc_isr (void)
 				else
 				{
 					mic_check |= 1 << (MIC2_sample_count + 10);
-					mic_time[mic_use][MIC2_sample_count] = TAR;
+					mic_time[mic_use][MIC2_sample_count] = (unsigned int)TAR;
 					MIC2_sample_count++;
 				}
 			}
