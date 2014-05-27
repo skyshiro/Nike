@@ -50,11 +50,12 @@ unsigned int mic_use;										//vector that determines mic being used
 
 int mic_adc[5];
 
-int CD10[SAMPLE_AVG_COUNT], CD21[SAMPLE_AVG_COUNT];	//holy shit memory usage Batman!
 float R_horz[SAMPLE_AVG_COUNT],B_horz[SAMPLE_AVG_COUNT], R_horz_avg, B_horz_avg;
 
 int main(void) {
 	unsigned int i;
+	int CD10[SAMPLE_AVG_COUNT], CD21[SAMPLE_AVG_COUNT];	//holy shit memory usage Batman!
+
 
     WDTCTL = WDTPW | WDTHOLD;						// Stop watchdog timer
 	BCSCTL1 = CALBC1_16MHZ;
@@ -65,6 +66,8 @@ int main(void) {
     convert_flag = 1;
 
     mic_check = 0x00;
+
+    TAR = 0x00;											//Clear TAR
 
     ADC10CTL1 |= ADC10SSEL_2;
     ADC10CTL0 |= ADC10IE /* + ADC10SHT_2 */;
@@ -122,17 +125,19 @@ int main(void) {
         CD21[i] = (mic_time[2][i]-mic_time[1][i]);
 
         //I wish I could take you out of your misery.
-        R_horz[i] = ARRAY_LENGTH_ACTUAL * ( 1 - ( (CD10[i] / ARRAY_LENGTH) * (CD10[i] / ARRAY_LENGTH)) ) + ARRAY_LENGTH_ACTUAL * ( 1 - ( (CD21[i] / ARRAY_LENGTH ) * (CD21[i] / ARRAY_LENGTH) ));
-        R_horz[i] = R_horz[i] / ( 2 * fabs( ( CD21[i] / ARRAY_LENGTH ) - ( CD10[i] / ARRAY_LENGTH ) ) );
+        R_horz[i] =  ARRAY_LENGTH_ACTUAL * ( 1 - ( (CD10[i] / ARRAY_LENGTH ) * ( CD10[i] / ARRAY_LENGTH ) ) );
+        R_horz[i] += ARRAY_LENGTH_ACTUAL * ( 1 - ( (CD21[i] / ARRAY_LENGTH ) * ( CD21[i] / ARRAY_LENGTH ) ) );
+        R_horz[i] = R_horz[i] / ( 2 * ( ( CD21[i] / ARRAY_LENGTH ) - ( CD10[i] / ARRAY_LENGTH ) ) );
 
         B_horz[i] = acos(( ARRAY_LENGTH_ACTUAL*ARRAY_LENGTH_ACTUAL - 2*R_horz[i]*CD21[i]/4000.0*343.0/2000.0 - ( CD21[i]/4000.0*343.0/2000.0)*( CD21[i]/4000.0*343.0/2000.0) ) / ( (2*R_horz[i]*ARRAY_LENGTH_ACTUAL)))*180/3.14159;
 
         R_horz_avg += R_horz[i];
         B_horz_avg += B_horz[i];
+
     }
 
-    R_horz_avg = R_horz_avg / SAMPLE_AVG_COUNT;
-    B_horz_avg = B_horz_avg / SAMPLE_AVG_COUNT;
+    R_horz_avg = R_horz_avg / SAMPLE_AVG_COUNT_CALC;
+    B_horz_avg = B_horz_avg / SAMPLE_AVG_COUNT_CALC;
 
     while(1);
 
