@@ -43,18 +43,18 @@ unsigned int MIC0_sample_count = 0;
 unsigned int MIC1_sample_count = 0;
 unsigned int MIC2_sample_count = 0;
 
-int mic_time[5][SAMPLE_AVG_COUNT];					//2D array, first dimension holds timing values from mic and second is for the multiple samples
+volatile int mic_time[5][SAMPLE_AVG_COUNT];					//2D array, first dimension holds timing values from mic and second is for the multiple samples
 int mic_adc[5];
 unsigned int mic_check;										//BITN in mic_check is for MICN. Determines which MIC has a time value
 unsigned int mic_use;										//vector that determines mic being used
 
 int mic_adc[5];
 
-float R_horz[SAMPLE_AVG_COUNT],B_horz[SAMPLE_AVG_COUNT], R_horz_avg, B_horz_avg;
+volatile float R_horz[SAMPLE_AVG_COUNT],B_horz[SAMPLE_AVG_COUNT], R_horz_avg, B_horz_avg;
 
 int main(void) {
 	unsigned int i;
-	int CD10[SAMPLE_AVG_COUNT], CD21[SAMPLE_AVG_COUNT];	//holy shit memory usage Batman!
+	volatile int CD10[SAMPLE_AVG_COUNT], CD21[SAMPLE_AVG_COUNT];	//holy shit memory usage Batman!
 
 
     WDTCTL = WDTPW | WDTHOLD;						// Stop watchdog timer
