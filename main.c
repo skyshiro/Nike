@@ -35,6 +35,8 @@
  *
  * Takes 5 samples from each microphone then does radius/bearing calculation and averages the results
  *
+ * Overwriting itself in memory
+ *
  */
 
 unsigned int virgin_flag;
@@ -43,18 +45,20 @@ unsigned int MIC0_sample_count = 0;
 unsigned int MIC1_sample_count = 0;
 unsigned int MIC2_sample_count = 0;
 
-int mic_time[5][SAMPLE_AVG_COUNT];					//2D array, first dimension holds timing values from mic and second is for the multiple samples
+volatile int mic_time[5][SAMPLE_AVG_COUNT];					//2D array, first dimension holds timing values from mic and second is for the multiple samples
+
 int mic_adc[5];
 unsigned int mic_check;										//BITN in mic_check is for MICN. Determines which MIC has a time value
 unsigned int mic_use;										//vector that determines mic being used
 
 int mic_adc[5];
 
-float R_horz[SAMPLE_AVG_COUNT],B_horz[SAMPLE_AVG_COUNT], R_horz_avg, B_horz_avg;
+volatile int CD10[SAMPLE_AVG_COUNT], CD21[SAMPLE_AVG_COUNT];	//holy shit memory usage Batman!
+
+volatile float R_horz[SAMPLE_AVG_COUNT],B_horz[SAMPLE_AVG_COUNT], R_horz_avg, B_horz_avg;
 
 int main(void) {
 	unsigned int i;
-	int CD10[SAMPLE_AVG_COUNT], CD21[SAMPLE_AVG_COUNT];	//holy shit memory usage Batman!
 
 
     WDTCTL = WDTPW | WDTHOLD;						// Stop watchdog timer
@@ -129,7 +133,7 @@ int main(void) {
         R_horz[i] += ARRAY_LENGTH_ACTUAL * ( 1 - ( (CD21[i] / ARRAY_LENGTH ) * ( CD21[i] / ARRAY_LENGTH ) ) );
         R_horz[i] = R_horz[i] / ( 2 * ( ( CD21[i] / ARRAY_LENGTH ) - ( CD10[i] / ARRAY_LENGTH ) ) );
 
-        B_horz[i] = acos(( ARRAY_LENGTH_ACTUAL*ARRAY_LENGTH_ACTUAL - 2*R_horz[i]*CD21[i]/4000.0*343.0/2000.0 - ( CD21[i]/4000.0*343.0/2000.0)*( CD21[i]/4000.0*343.0/2000.0) ) / ( (2*R_horz[i]*ARRAY_LENGTH_ACTUAL)))*180/3.14159;
+        B_horz[i] = acos((double)(( ARRAY_LENGTH_ACTUAL*ARRAY_LENGTH_ACTUAL - 2*R_horz[i]*CD21[i]/4000.0*343.0/2000.0 - ( CD21[i]/4000.0*343.0/2000.0)*( CD21[i]/4000.0*343.0/2000.0) ) / ( (2*R_horz[i]*ARRAY_LENGTH_ACTUAL))))*180/3.14159;
 
         R_horz_avg += R_horz[i];
         B_horz_avg += B_horz[i];
