@@ -18,6 +18,8 @@
 #define ARRAY_LENGTH_ACTUAL 0.3 //length between mic in meters
 #define ARRAY_LENGTH_ACTUAL_MM 300 //length between mic in millimeters
 
+#define ACOS_COUNT 45
+
 /* Timer runs at 8MHz to avoid overflow. Timer is an integer from 0->2^16 while mic_time is a float from 0->2^15
  *
  * P1.1 through P1.5 are the microphone inputs MIC0 through MIC4
@@ -51,20 +53,27 @@ volatile int mic_time[5][SAMPLE_AVG_COUNT];					//2D array, first dimension hold
 unsigned int mic_check;										//BITN in mic_check is for MICN. Determines which MIC has a time value
 unsigned int mic_use;										//vector that determines mic being used
 
-static int mic_adc[5];
-
 volatile float B_horz;
+int B_horz_angle;
 volatile unsigned int R_horz;
+
+int acos_table[ACOS_COUNT];
 
 volatile float duhthecoodisiusofhermies;
 volatile float uhhtemp;
 
 int main(void) {
+
 	unsigned int i;
 	volatile int CD10[SAMPLE_AVG_COUNT], CD21[SAMPLE_AVG_COUNT];	//holy shit memory usage Batman!
 	volatile int CD10_avg = 0, CD21_avg = 0;
 	volatile unsigned int flux_styx;
 
+
+	for(i = 0; i < ACOS_COUNT; i++)
+	{
+		acos_table[i] = acos( 2.0*i/ACOS_COUNT - .95 );
+	}
 
 
 
@@ -138,12 +147,6 @@ int main(void) {
 
     }
 
-    InitDS18B20();
-
-    duhthecoodisiusofhermies = GetData();
-
-    uhhtemp = duhthecoodisiusofhermies;
-
     CD10_avg /= SAMPLE_AVG_COUNT_CALC;
     CD21_avg /= SAMPLE_AVG_COUNT_CALC;
 
@@ -152,9 +155,16 @@ int main(void) {
 	R_horz = R_horz / ( 2 * ( ( CD21_avg / ARRAY_LENGTH ) - ( CD10_avg / ARRAY_LENGTH ) ) );
 
 	flux_styx = R_horz;
-    virgin_flag = 5;
 
-	B_horz =  acos(( ARRAY_LENGTH_ACTUAL*ARRAY_LENGTH_ACTUAL - 2*R_horz/1000.0*CD21_avg/4000.0*343.0/2000.0 - ( CD21_avg/4000.0*343.0/2000.0)*( CD21_avg/4000.0*343.0/2000.0) ) / ( (2*R_horz/1000.0*ARRAY_LENGTH_ACTUAL)))*180/3.14159;
+	B_horz = (( ARRAY_LENGTH_ACTUAL*ARRAY_LENGTH_ACTUAL - 2*R_horz/1000.0*CD21_avg/4000.0*343.0/2000.0 - ( CD21_avg/4000.0*343.0/2000.0)*( CD21_avg/4000.0*343.0/2000.0) ) / ( (2*R_horz/1000.0*ARRAY_LENGTH_ACTUAL)))*1000;
+
+	B_horz_angle = acos_table[(int)(ACOS_COUNT/2*(B_horz+1))];
+
+	InitDS18B20();
+
+	duhthecoodisiusofhermies = GetData()*9/5+32;
+
+	uhhtemp = duhthecoodisiusofhermies;
 
     while(1);
 
