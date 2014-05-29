@@ -38,28 +38,31 @@
  *
  * Radius is calculated as an integer in mm and the bearing is calculated as float in degrees
  *
+ *
  */
-
 unsigned int virgin_flag;
 unsigned int convert_flag;									//determines if ADC has converted value
 unsigned int MIC0_sample_count = 0;
 unsigned int MIC1_sample_count = 0;
 unsigned int MIC2_sample_count = 0;
 
-volatile int mic_time[5][SAMPLE_AVG_COUNT];					//2D array, first dimension holds timing values from mic and second is for the multiple samples
-int mic_adc[5];
+volatile int mic_time[5][SAMPLE_AVG_COUNT];					//2D array, first dimension holds timing values from mic and second is for the multiple samples int mic_adc[5];
 unsigned int mic_check;										//BITN in mic_check is for MICN. Determines which MIC has a time value
 unsigned int mic_use;										//vector that determines mic being used
 
-int mic_adc[5];
+static int mic_adc[5];
 
 volatile float B_horz;
 volatile unsigned int R_horz;
+
+float bearing(unsigned int range, unsigned int CD21_func);
 
 int main(void) {
 	unsigned int i;
 	volatile int CD10[SAMPLE_AVG_COUNT], CD21[SAMPLE_AVG_COUNT];	//holy shit memory usage Batman!
 	volatile int CD10_avg = 0, CD21_avg = 0;
+	volatile unsigned int flux_styx;
+
 
     WDTCTL = WDTPW | WDTHOLD;						// Stop watchdog timer
 	BCSCTL1 = CALBC1_16MHZ;
@@ -138,11 +141,22 @@ int main(void) {
 	R_horz += ARRAY_LENGTH_ACTUAL_MM * ( 1 - ( (CD21_avg / ARRAY_LENGTH ) * ( CD21_avg / ARRAY_LENGTH ) ) );
 	R_horz = R_horz / ( 2 * ( ( CD21_avg / ARRAY_LENGTH ) - ( CD10_avg / ARRAY_LENGTH ) ) );
 
-	B_horz = acos(( ARRAY_LENGTH_ACTUAL*ARRAY_LENGTH_ACTUAL - 2*R_horz/1000.0*CD21_avg/4000.0*343.0/2000.0 - ( CD21_avg/4000.0*343.0/2000.0)*( CD21_avg/4000.0*343.0/2000.0) ) / ( (2*R_horz/1000.0*ARRAY_LENGTH_ACTUAL)))*180/3.14159;
+	flux_styx = R_horz;
+    virgin_flag = 5;
+
+
+	//R_horz = flux_styx;
+
+	B_horz = bearing(R_horz, CD21_avg);
 
     while(1);
 
 	return 0;
+}
+
+float bearing(unsigned int range, unsigned int CD21_func)
+{
+	return acos(( ARRAY_LENGTH_ACTUAL*ARRAY_LENGTH_ACTUAL - 2*range/1000.0*CD21_func/4000.0*343.0/2000.0 - ( CD21_func/4000.0*343.0/2000.0)*( CD21_func/4000.0*343.0/2000.0) ) / ( (2*range/1000.0*ARRAY_LENGTH_ACTUAL)))*180/3.14159;
 }
 
 //ISR for ADC
