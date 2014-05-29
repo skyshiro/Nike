@@ -1,4 +1,5 @@
 #include <msp430.h> 
+#include "ds18x20.h"
 #include <math.h>
 
 #define MIC0 BIT0
@@ -55,13 +56,16 @@ static int mic_adc[5];
 volatile float B_horz;
 volatile unsigned int R_horz;
 
-float bearing(unsigned int range, unsigned int CD21_func);
+volatile float duhthecoodisiusofhermies;
+volatile float uhhtemp;
 
 int main(void) {
 	unsigned int i;
 	volatile int CD10[SAMPLE_AVG_COUNT], CD21[SAMPLE_AVG_COUNT];	//holy shit memory usage Batman!
 	volatile int CD10_avg = 0, CD21_avg = 0;
 	volatile unsigned int flux_styx;
+
+
 
 
     WDTCTL = WDTPW | WDTHOLD;						// Stop watchdog timer
@@ -134,6 +138,12 @@ int main(void) {
 
     }
 
+    InitDS18B20();
+
+    duhthecoodisiusofhermies = GetData();
+
+    uhhtemp = duhthecoodisiusofhermies;
+
     CD10_avg /= SAMPLE_AVG_COUNT_CALC;
     CD21_avg /= SAMPLE_AVG_COUNT_CALC;
 
@@ -144,20 +154,14 @@ int main(void) {
 	flux_styx = R_horz;
     virgin_flag = 5;
 
-
-	//R_horz = flux_styx;
-
-	B_horz = bearing(R_horz, CD21_avg);
+	B_horz =  acos(( ARRAY_LENGTH_ACTUAL*ARRAY_LENGTH_ACTUAL - 2*R_horz/1000.0*CD21_avg/4000.0*343.0/2000.0 - ( CD21_avg/4000.0*343.0/2000.0)*( CD21_avg/4000.0*343.0/2000.0) ) / ( (2*R_horz/1000.0*ARRAY_LENGTH_ACTUAL)))*180/3.14159;
 
     while(1);
 
 	return 0;
 }
 
-float bearing(unsigned int range, unsigned int CD21_func)
-{
-	return acos(( ARRAY_LENGTH_ACTUAL*ARRAY_LENGTH_ACTUAL - 2*range/1000.0*CD21_func/4000.0*343.0/2000.0 - ( CD21_func/4000.0*343.0/2000.0)*( CD21_func/4000.0*343.0/2000.0) ) / ( (2*range/1000.0*ARRAY_LENGTH_ACTUAL)))*180/3.14159;
-}
+
 
 //ISR for ADC
 #pragma vector=ADC10_VECTOR
