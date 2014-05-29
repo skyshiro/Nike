@@ -15,6 +15,7 @@
 
 #define ARRAY_LENGTH 7000.00	//length between mic in TARs
 #define ARRAY_LENGTH_ACTUAL 0.3 //length between mic in meters
+#define ARRAY_LENGTH_ACTUAL_MM 300 //length between mic in millimeters
 
 /* Timer runs at 8MHz to avoid overflow. Timer is an integer from 0->2^16 while mic_time is a float from 0->2^15
  *
@@ -35,8 +36,6 @@
  *
  * Takes 5 samples from each microphone then does radius/bearing calculation and averages the results
  *
- * Overwriting itself in memory
- *
  */
 
 unsigned int virgin_flag;
@@ -46,20 +45,19 @@ unsigned int MIC1_sample_count = 0;
 unsigned int MIC2_sample_count = 0;
 
 volatile int mic_time[5][SAMPLE_AVG_COUNT];					//2D array, first dimension holds timing values from mic and second is for the multiple samples
-
 int mic_adc[5];
 unsigned int mic_check;										//BITN in mic_check is for MICN. Determines which MIC has a time value
 unsigned int mic_use;										//vector that determines mic being used
 
 int mic_adc[5];
 
-volatile int CD10[SAMPLE_AVG_COUNT], CD21[SAMPLE_AVG_COUNT];	//holy shit memory usage Batman!
-
-volatile float R_horz[SAMPLE_AVG_COUNT],B_horz[SAMPLE_AVG_COUNT], R_horz_avg, B_horz_avg;
+volatile float B_horz;
+volatile unsigned int R_horz;
 
 int main(void) {
 	unsigned int i;
-
+	volatile int CD10[SAMPLE_AVG_COUNT], CD21[SAMPLE_AVG_COUNT];	//holy shit memory usage Batman!
+	volatile int CD10_avg = 0, CD21_avg = 0;
 
     WDTCTL = WDTPW | WDTHOLD;						// Stop watchdog timer
 	BCSCTL1 = CALBC1_16MHZ;
@@ -119,29 +117,26 @@ int main(void) {
 
     ADC10CTL0 &= ~ADC10ON;					//turn off ADC when done filling with values
 
-    R_horz_avg = 0.0;
-    B_horz_avg = 0.0;
+    CD10_avg = 0;
+    CD21_avg = 0;
+
 
     //INSERT LOOP TO CALCULATE RANGE AND BEARING FOR 5 SAMPLES
     for(i=0; i<SAMPLE_AVG_COUNT_CALC; i++)
     {
-        CD10[i] = (mic_time[1][i]-mic_time[0][i]);
-        CD21[i] = (mic_time[2][i]-mic_time[1][i]);
-
-        //I wish I could take you out of your misery.
-        R_horz[i] =  ARRAY_LENGTH_ACTUAL * ( 1 - ( (CD10[i] / ARRAY_LENGTH ) * ( CD10[i] / ARRAY_LENGTH ) ) );
-        R_horz[i] += ARRAY_LENGTH_ACTUAL * ( 1 - ( (CD21[i] / ARRAY_LENGTH ) * ( CD21[i] / ARRAY_LENGTH ) ) );
-        R_horz[i] = R_horz[i] / ( 2 * ( ( CD21[i] / ARRAY_LENGTH ) - ( CD10[i] / ARRAY_LENGTH ) ) );
-
-        B_horz[i] = acos((double)(( ARRAY_LENGTH_ACTUAL*ARRAY_LENGTH_ACTUAL - 2*R_horz[i]*CD21[i]/4000.0*343.0/2000.0 - ( CD21[i]/4000.0*343.0/2000.0)*( CD21[i]/4000.0*343.0/2000.0) ) / ( (2*R_horz[i]*ARRAY_LENGTH_ACTUAL))))*180/3.14159;
-
-        R_horz_avg += R_horz[i];
-        B_horz_avg += B_horz[i];
+    	CD10_avg += (mic_time[1][i]-mic_time[0][i]);
+    	CD21_avg += (mic_time[2][i]-mic_time[1][i]);
 
     }
 
-    R_horz_avg = R_horz_avg / SAMPLE_AVG_COUNT_CALC;
-    B_horz_avg = B_horz_avg / SAMPLE_AVG_COUNT_CALC;
+    CD10_avg /= SAMPLE_AVG_COUNT_CALC;
+    CD21_avg /= SAMPLE_AVG_COUNT_CALC;
+
+    R_horz =  ARRAY_LENGTH_ACTUAL_MM * ( 1 - ( (CD10_avg / ARRAY_LENGTH ) * ( CD10_avg / ARRAY_LENGTH ) ) );
+	R_horz += ARRAY_LENGTH_ACTUAL_MM * ( 1 - ( (CD21_avg / ARRAY_LENGTH ) * ( CD21_avg / ARRAY_LENGTH ) ) );
+	R_horz = R_horz / ( 2 * ( ( CD21_avg / ARRAY_LENGTH ) - ( CD10_avg / ARRAY_LENGTH ) ) );
+
+	B_horz = acos(( ARRAY_LENGTH_ACTUAL*ARRAY_LENGTH_ACTUAL - 2*R_horz/1000.0*CD21_avg/4000.0*343.0/2000.0 - ( CD21_avg/4000.0*343.0/2000.0)*( CD21_avg/4000.0*343.0/2000.0) ) / ( (2*R_horz/1000.0*ARRAY_LENGTH_ACTUAL)))*180/3.14159;
 
     while(1);
 
