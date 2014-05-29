@@ -36,6 +36,8 @@
  *
  * Takes 5 samples from each microphone then does radius/bearing calculation and averages the results
  *
+ * Radius is calculated as an integer in mm and the bearing is calculated as float in degrees
+ *
  */
 
 unsigned int virgin_flag;
