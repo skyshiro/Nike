@@ -219,7 +219,7 @@ __interrupt void adc_isr (void)
 				if(MIC0_sample_count < SAMPLE_AVG_COUNT)
 				{
 					mic_check |= 1 << (MIC0_sample_count);
-					mic_time[mic_use][MIC0_sample_count] = (unsigned int)TAR;
+					mic_time[mic_use][MIC0_sample_count] = TAR;
 					MIC0_sample_count++;
 				}
 			}
@@ -228,7 +228,7 @@ __interrupt void adc_isr (void)
 				if(MIC1_sample_count < SAMPLE_AVG_COUNT)
 				{
 					mic_check |= 1 << (MIC1_sample_count + 5);
-					mic_time[mic_use][MIC1_sample_count] = (unsigned int)TAR;
+					mic_time[mic_use][MIC1_sample_count] = TAR;
 					MIC1_sample_count++;
 				}
 			}
@@ -237,7 +237,7 @@ __interrupt void adc_isr (void)
 				if(MIC2_sample_count < SAMPLE_AVG_COUNT)
 				{
 					mic_check |= 1 << (MIC2_sample_count + 10);
-					mic_time[mic_use][MIC2_sample_count] = (unsigned int)TAR;
+					mic_time[mic_use][MIC2_sample_count] = TAR;
 					MIC2_sample_count++;
 				}
 			}
