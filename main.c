@@ -173,62 +173,75 @@ __interrupt void adc_isr (void)
 			virgin_flag = 0;						//turn off flag so program doesn't repeat branch
 
 			//the switch checks to see what mic was triggered and use that as 0 time
-			switch(mic_use)
+
+			if(mic_use == 0)
 			{
-			case 0:
-				if(!(MIC0_sample_count == SAMPLE_AVG_COUNT))
+				if(MIC0_sample_count == SAMPLE_AVG_COUNT)
+				{
+				}
+				else
 				{
 					mic_check |= 1 << (MIC0_sample_count);
 					mic_time[mic_use][MIC0_sample_count] = 0;
 					MIC0_sample_count++;
 				}
-			case 1:
-				if(!(MIC1_sample_count == SAMPLE_AVG_COUNT))
+			}
+			else if(mic_use == 1)
+			{
+				if(MIC1_sample_count == SAMPLE_AVG_COUNT)
+				{
+				}
+				else
 				{
 					mic_check |= 1 << (MIC1_sample_count + 5);
 					mic_time[mic_use][MIC1_sample_count] = 0;
 					MIC1_sample_count++;
 				}
-			case 2:
-				if(!(MIC2_sample_count == SAMPLE_AVG_COUNT))
+			}
+			else if(mic_use == 2)
+			{
+				if(MIC2_sample_count == SAMPLE_AVG_COUNT)
+				{
+				}
+				else
 				{
 					mic_check |= 1 << (MIC2_sample_count + 10);
 					mic_time[mic_use][MIC2_sample_count] = 0;
 					MIC2_sample_count++;
 				}
 			}
-
-
 		}
 
 		else
 		{
-			switch(mic_use)
+			if(mic_use == 0)
 			{
-			case 0:
-				if(!(MIC0_sample_count == SAMPLE_AVG_COUNT))
+				if(MIC0_sample_count < SAMPLE_AVG_COUNT)
 				{
 					mic_check |= 1 << (MIC0_sample_count);
-					mic_time[mic_use][MIC0_sample_count] = TAR;
+					mic_time[mic_use][MIC0_sample_count] = (unsigned int)TAR;
 					MIC0_sample_count++;
 				}
-
-			case 1:
-				if(!(MIC1_sample_count == SAMPLE_AVG_COUNT))
+			}
+			else if(mic_use == 1)
+			{
+				if(MIC1_sample_count < SAMPLE_AVG_COUNT)
 				{
 					mic_check |= 1 << (MIC1_sample_count + 5);
-					mic_time[mic_use][MIC1_sample_count] = TAR;
+					mic_time[mic_use][MIC1_sample_count] = (unsigned int)TAR;
 					MIC1_sample_count++;
 				}
-
-			case 2:
-				if(!(MIC2_sample_count == SAMPLE_AVG_COUNT))
+			}
+			else if(mic_use == 2)
+			{
+				if(MIC2_sample_count < SAMPLE_AVG_COUNT)
 				{
 					mic_check |= 1 << (MIC2_sample_count + 10);
-					mic_time[mic_use][MIC2_sample_count] = TAR;
+					mic_time[mic_use][MIC2_sample_count] = (unsigned int)TAR;
 					MIC2_sample_count++;
 				}
 			}
+
 		}
 	}
 }
