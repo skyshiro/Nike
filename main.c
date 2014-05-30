@@ -55,9 +55,9 @@ unsigned int mic_use;										//vector that determines mic being used
 
 volatile float B_horz;
 int B_horz_angle;
-volatile unsigned int R_horz;
+volatile float R_horz;
 
-int acos_table[ACOS_COUNT];
+int acos_table[100] = {180,169,164,160,157,154,152,149,147,145,143,141,139,138,136,134,133,131,130,128,127,125,124,123,121,120,119,117,116,115,114,112,111,110,109,107,106,105,104,103,102,100,99,98,97,96,95,93,92,91,90,89,88,87,85,84,83,82,81,80,78,77,76,75,74,73,71,70,69,68,66,65,64,63,61,60,59,57,56,55,53,52,50,49,47,46,44,42,41,39,37,35,33,31,28,26,23,20,16,11};
 
 volatile float duhthecoodisiusofhermies;
 volatile float uhhtemp;
@@ -67,15 +67,6 @@ int main(void) {
 	unsigned int i;
 	volatile int CD10[SAMPLE_AVG_COUNT], CD21[SAMPLE_AVG_COUNT];	//holy shit memory usage Batman!
 	volatile int CD10_avg = 0, CD21_avg = 0;
-	volatile unsigned int flux_styx;
-
-
-	for(i = 0; i < ACOS_COUNT; i++)
-	{
-		acos_table[i] = acos( 2.0*i/ACOS_COUNT - .95 );
-	}
-
-
 
     WDTCTL = WDTPW | WDTHOLD;						// Stop watchdog timer
 	BCSCTL1 = CALBC1_16MHZ;
@@ -150,15 +141,13 @@ int main(void) {
     CD10_avg /= SAMPLE_AVG_COUNT_CALC;
     CD21_avg /= SAMPLE_AVG_COUNT_CALC;
 
-    R_horz =  ARRAY_LENGTH_ACTUAL_MM * ( 1 - ( (CD10_avg / ARRAY_LENGTH ) * ( CD10_avg / ARRAY_LENGTH ) ) );
-	R_horz += ARRAY_LENGTH_ACTUAL_MM * ( 1 - ( (CD21_avg / ARRAY_LENGTH ) * ( CD21_avg / ARRAY_LENGTH ) ) );
+    R_horz =  ARRAY_LENGTH_ACTUAL * ( 1 - ( (CD10_avg / ARRAY_LENGTH ) * ( CD10_avg / ARRAY_LENGTH ) ) );
+	R_horz += ARRAY_LENGTH_ACTUAL * ( 1 - ( (CD21_avg / ARRAY_LENGTH ) * ( CD21_avg / ARRAY_LENGTH ) ) );
 	R_horz = R_horz / ( 2 * ( ( CD21_avg / ARRAY_LENGTH ) - ( CD10_avg / ARRAY_LENGTH ) ) );
 
-	flux_styx = R_horz;
+	B_horz =( ARRAY_LENGTH_ACTUAL*ARRAY_LENGTH_ACTUAL - 2*R_horz*CD21_avg/4000*343/2000 - CD21_avg/4000*343/2000*CD21_avg/4000*343/2000) / ( (2*R_horz*ARRAY_LENGTH_ACTUAL) );
 
-	B_horz = (( ARRAY_LENGTH_ACTUAL*ARRAY_LENGTH_ACTUAL - 2*R_horz/1000.0*CD21_avg/4000.0*343.0/2000.0 - ( CD21_avg/4000.0*343.0/2000.0)*( CD21_avg/4000.0*343.0/2000.0) ) / ( (2*R_horz/1000.0*ARRAY_LENGTH_ACTUAL)))*1000;
-
-	B_horz_angle = acos_table[(int)(ACOS_COUNT/2*(B_horz+1))];
+	B_horz_angle = acos_table[(int)(100/2*(B_horz+1))];
 
 	InitDS18B20();
 
