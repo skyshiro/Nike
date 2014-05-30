@@ -12,12 +12,9 @@
 #define ADC_THRES 900
 #define WIN_TIME 5
 #define SAMPLE_AVG_COUNT 5 		//number of samples to avg
-#define SAMPLE_AVG_COUNT_CALC 4
+#define SAMPLE_AVG_COUNT_CALC 5
 
 #define ARRAY_LENGTH_ACTUAL 0.3 //length between mic in meters
-#define ARRAY_LENGTH_ACTUAL_MM 300 //length between mic in millimeters
-
-#define ACOS_COUNT 45
 
 /* Timer runs at 8MHz to avoid overflow. Timer is an integer from 0->2^16 while mic_time is a float from 0->2^15
  *
@@ -52,9 +49,9 @@ volatile int mic_time[5][SAMPLE_AVG_COUNT];					//2D array, first dimension hold
 unsigned int mic_check;										//BITN in mic_check is for MICN. Determines which MIC has a time value
 unsigned int mic_use;										//vector that determines mic being used
 
-volatile float B_horz;
-int B_horz_angle;
-volatile float R_horz;
+volatile int CD10[SAMPLE_AVG_COUNT], CD21[SAMPLE_AVG_COUNT];	//holy shit memory usage Batman!
+volatile float B_horz[SAMPLE_AVG_COUNT];
+volatile float R_horz[SAMPLE_AVG_COUNT];
 
 int acos_table[100] = {180,169,164,160,157,154,152,149,147,145,143,141,139,138,136,134,133,131,130,128,127,125,124,123,121,120,119,117,116,115,114,112,111,110,109,107,106,105,104,103,102,100,99,98,97,96,95,93,92,91,90,89,88,87,85,84,83,82,81,80,78,77,76,75,74,73,71,70,69,68,66,65,64,63,61,60,59,57,56,55,53,52,50,49,47,46,44,42,41,39,37,35,33,31,28,26,23,20,16,11};
 
@@ -65,8 +62,7 @@ volatile float array_length;
 int main(void) {
 
 	unsigned int i;
-	volatile int CD10[SAMPLE_AVG_COUNT], CD21[SAMPLE_AVG_COUNT];	//holy shit memory usage Batman!
-	volatile int CD10_avg = 0, CD21_avg = 0;
+
 
     WDTCTL = WDTPW | WDTHOLD;						// Stop watchdog timer
 	BCSCTL1 = CALBC1_16MHZ;
@@ -126,37 +122,28 @@ int main(void) {
 
     ADC10CTL0 &= ~ADC10ON;					//turn off ADC when done filling with values
 
-    CD10_avg = 0;
-    CD21_avg = 0;
+    InitDS18B20();
 
+	temperature_val = GetData();
+
+	sound_speed = 0.606 * temperature_val + 331.3;
+
+	array_length = ARRAY_LENGTH_ACTUAL * 4000 / sound_speed * 2000;
 
     //INSERT LOOP TO CALCULATE RANGE AND BEARING FOR 5 SAMPLES
-    for(i=0; i<SAMPLE_AVG_COUNT_CALC; i++)
+    for(i=0; i<SAMPLE_AVG_COUNT; i++)
     {
-    	CD10_avg += (mic_time[1][i]-mic_time[0][i]);
-    	CD21_avg += (mic_time[2][i]-mic_time[1][i]);
+    	CD10[i] = (mic_time[1][i]-mic_time[0][i]);
+    	CD21[i] = (mic_time[2][i]-mic_time[1][i]);
+
+        R_horz[i] =  ARRAY_LENGTH_ACTUAL * ( 1 - ( (CD10[i] / array_length ) * ( CD10[i] / array_length ) ) );
+    	R_horz[i] += ARRAY_LENGTH_ACTUAL * ( 1 - ( (CD21[i] / array_length ) * ( CD21[i] / array_length ) ) );
+    	R_horz[i] = R_horz[i] / fabs( 2 * ( ( CD21[i] / array_length ) - ( CD10[i] / array_length ) ) );
+
+    	B_horz[i] =( ARRAY_LENGTH_ACTUAL*ARRAY_LENGTH_ACTUAL - 2*R_horz[i]*CD21[i]/4000*sound_speed/2000 - CD21[i]/4000*343/2000*CD21[i]/4000*sound_speed/2000) / ( (2*R_horz[i]*ARRAY_LENGTH_ACTUAL) );
+    	B_horz[i] = acos_table[ (int)( 100/2*( B_horz[i] + 1 ) )];
 
     }
-
-    CD10_avg /= SAMPLE_AVG_COUNT_CALC;
-    CD21_avg /= SAMPLE_AVG_COUNT_CALC;
-    
-    InitDS18B20();
-    
-    temperature_value = GetData();
-    
-    sound_speed = 0.606 * temperature_value + 331.3
-    
-    array_length = ARRAY_LENGTH_ACTUAL * 4000 * sound_speed * 2000;
-
-    R_horz =  ARRAY_LENGTH_ACTUAL * ( 1 - ( (CD10_avg / array_length ) * ( CD10_avg / array_length ) ) );
-	R_horz += ARRAY_LENGTH_ACTUAL * ( 1 - ( (CD21_avg / array_length ) * ( CD21_avg / array_length ) ) );
-	R_horz = R_horz / ( 2 * ( ( CD21_avg / array_length ) - ( CD10_avg / array_length ) ) );
-
-	B_horz =( ARRAY_LENGTH_ACTUAL*ARRAY_LENGTH_ACTUAL - 2*R_horz*CD21_avg/4000*sound_speed/2000 - CD21_avg/4000*343/2000*CD21_avg/4000*sound_speed/2000) / ( (2*R_horz*ARRAY_LENGTH_ACTUAL) );
-
-	B_horz_angle = acos_table[(int)(100/2*(B_horz+1))];
-
 
     while(1);
 
@@ -185,75 +172,63 @@ __interrupt void adc_isr (void)
 
 			virgin_flag = 0;						//turn off flag so program doesn't repeat branch
 
-			//the block of ifs checks to see what mic was triggered and use that as 0 time
-			if(mic_use == 0)
+			//the switch checks to see what mic was triggered and use that as 0 time
+			switch(mic_use)
 			{
-				if(MIC0_sample_count == SAMPLE_AVG_COUNT)
-				{
-				}
-				else
+			case 0:
+				if(!(MIC0_sample_count == SAMPLE_AVG_COUNT))
 				{
 					mic_check |= 1 << (MIC0_sample_count);
 					mic_time[mic_use][MIC0_sample_count] = 0;
 					MIC0_sample_count++;
 				}
-			}
-			else if(mic_use == 1)
-			{
-				if(MIC1_sample_count == SAMPLE_AVG_COUNT)
-				{
-				}
-				else
+			case 1:
+				if(!(MIC1_sample_count == SAMPLE_AVG_COUNT))
 				{
 					mic_check |= 1 << (MIC1_sample_count + 5);
 					mic_time[mic_use][MIC1_sample_count] = 0;
 					MIC1_sample_count++;
 				}
-			}
-			else if(mic_use == 2)
-			{
-				if(MIC2_sample_count == SAMPLE_AVG_COUNT)
-				{
-				}
-				else
+			case 2:
+				if(!(MIC2_sample_count == SAMPLE_AVG_COUNT))
 				{
 					mic_check |= 1 << (MIC2_sample_count + 10);
 					mic_time[mic_use][MIC2_sample_count] = 0;
 					MIC2_sample_count++;
 				}
 			}
+
+
 		}
 
 		else
 		{
-			if(mic_use == 0)
+			switch(mic_use)
 			{
-				if(MIC0_sample_count < SAMPLE_AVG_COUNT)
+			case 0:
+				if(!(MIC0_sample_count == SAMPLE_AVG_COUNT))
 				{
 					mic_check |= 1 << (MIC0_sample_count);
-					mic_time[mic_use][MIC0_sample_count] = (unsigned int)TAR;
+					mic_time[mic_use][MIC0_sample_count] = TAR;
 					MIC0_sample_count++;
 				}
-			}
-			else if(mic_use == 1)
-			{
-				if(MIC1_sample_count < SAMPLE_AVG_COUNT)
+
+			case 1:
+				if(!(MIC1_sample_count == SAMPLE_AVG_COUNT))
 				{
 					mic_check |= 1 << (MIC1_sample_count + 5);
-					mic_time[mic_use][MIC1_sample_count] = (unsigned int)TAR;
+					mic_time[mic_use][MIC1_sample_count] = TAR;
 					MIC1_sample_count++;
 				}
-			}
-			else if(mic_use == 2)
-			{
-				if(MIC2_sample_count < SAMPLE_AVG_COUNT)
+
+			case 2:
+				if(!(MIC2_sample_count == SAMPLE_AVG_COUNT))
 				{
 					mic_check |= 1 << (MIC2_sample_count + 10);
-					mic_time[mic_use][MIC2_sample_count] = (unsigned int)TAR;
+					mic_time[mic_use][MIC2_sample_count] = TAR;
 					MIC2_sample_count++;
 				}
 			}
-
 		}
 	}
 }
