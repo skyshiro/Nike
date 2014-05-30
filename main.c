@@ -59,8 +59,7 @@ volatile float R_horz;
 
 int acos_table[100] = {180,169,164,160,157,154,152,149,147,145,143,141,139,138,136,134,133,131,130,128,127,125,124,123,121,120,119,117,116,115,114,112,111,110,109,107,106,105,104,103,102,100,99,98,97,96,95,93,92,91,90,89,88,87,85,84,83,82,81,80,78,77,76,75,74,73,71,70,69,68,66,65,64,63,61,60,59,57,56,55,53,52,50,49,47,46,44,42,41,39,37,35,33,31,28,26,23,20,16,11};
 
-volatile float duhthecoodisiusofhermies;
-volatile float uhhtemp;
+volatile float temperature_val;
 
 int main(void) {
 
@@ -73,87 +72,11 @@ int main(void) {
 	DCOCTL = CALDCO_16MHZ;
 	_enable_interrupts();
 
-    virgin_flag = 1;
-    convert_flag = 1;
-
-    mic_check = 0x00;
-
-    TAR = 0x00;											//Clear TAR
-
-    ADC10CTL1 |= ADC10SSEL_2;
-    ADC10CTL0 |= ADC10IE /* + ADC10SHT_2 */;
-    ADC10CTL0 |= ADC10ON;								//turn on the ADC and interrupts for it
-    //sweep microphone input
-
-    //for 5 mic setup
-    //while(!(mic_check & 0x1F))						//when all bits in mic_check vector are set, exit while loop to continue
-
-    //for 2 mic setup
-    while(mic_check != 0x7FFF)							//every 5 bits is is dedicated to 5 samples from each mic. 0x755 = 15 bits
-    {
-    	//Checking MIC0
-    	if(~(mic_check & 0x1F))							//0x1F is 5 bits, when all 5 samples have been taken mic_check4:0 will be high
-    	{
-    		mic_use = 0;
-    		ADC10CTL0 |= ADC10SC+ENC;
-    		while(convert_flag);
-    		convert_flag = 1;
-    	}
-
-    	//Checking MIC1
-    	if(~(mic_check & 0x3E0))
-		{
-    		mic_use = 1;
-    		ADC10CTL1 |= INCH_1;
-			ADC10CTL0 |= ADC10SC+ENC;;
-			while(convert_flag);
-			convert_flag = 1;
-			ADC10CTL1 &= ~INCH_1;
-		}
-
-    	//Checking MIC2
-    	if(~(mic_check & 0x7C00))
-		{
-			mic_use = 2;
-			ADC10CTL1 |= INCH_2;
-			ADC10CTL0 |= ADC10SC+ENC;;
-			while(convert_flag);
-			convert_flag = 1;
-			ADC10CTL1 &= ~INCH_2;
-		}
-
-    }
-
-    ADC10CTL0 &= ~ADC10ON;					//turn off ADC when done filling with values
-
-    CD10_avg = 0;
-    CD21_avg = 0;
-
-
-    //INSERT LOOP TO CALCULATE RANGE AND BEARING FOR 5 SAMPLES
-    for(i=0; i<SAMPLE_AVG_COUNT_CALC; i++)
-    {
-    	CD10_avg += (mic_time[1][i]-mic_time[0][i]);
-    	CD21_avg += (mic_time[2][i]-mic_time[1][i]);
-
-    }
-
-    CD10_avg /= SAMPLE_AVG_COUNT_CALC;
-    CD21_avg /= SAMPLE_AVG_COUNT_CALC;
-
-    R_horz =  ARRAY_LENGTH_ACTUAL * ( 1 - ( (CD10_avg / ARRAY_LENGTH ) * ( CD10_avg / ARRAY_LENGTH ) ) );
-	R_horz += ARRAY_LENGTH_ACTUAL * ( 1 - ( (CD21_avg / ARRAY_LENGTH ) * ( CD21_avg / ARRAY_LENGTH ) ) );
-	R_horz = R_horz / ( 2 * ( ( CD21_avg / ARRAY_LENGTH ) - ( CD10_avg / ARRAY_LENGTH ) ) );
-
-	B_horz =( ARRAY_LENGTH_ACTUAL*ARRAY_LENGTH_ACTUAL - 2*R_horz*CD21_avg/4000*343/2000 - CD21_avg/4000*343/2000*CD21_avg/4000*343/2000) / ( (2*R_horz*ARRAY_LENGTH_ACTUAL) );
-
-	B_horz_angle = acos_table[(int)(100/2*(B_horz+1))];
+    
 
 	InitDS18B20();
 
-	duhthecoodisiusofhermies = GetData()*9/5+32;
-
-	uhhtemp = duhthecoodisiusofhermies;
+	temperature_val = GetData()*9/5+32;
 
     while(1);
 
@@ -161,96 +84,3 @@ int main(void) {
 }
 
 
-
-//ISR for ADC
-#pragma vector=ADC10_VECTOR
-__interrupt void adc_isr (void)
-{
-	convert_flag = 0;
-
-	ADC10CTL0 &= ~ENC;								//turn off ENC bit so the input channel can be changed
-
-	//mic_adc[mic_use] = ADC10MEM;
-
-	if(ADC10MEM > ADC_THRES)						//check is ADC value is close to rail
-	{
-
-		if(virgin_flag)
-		{
-			//turn on the timer
-			TACTL = TASSEL_2 + MC_2 + ID_1;                 // SMCLK, continous mode @ 16MHz
-
-			virgin_flag = 0;						//turn off flag so program doesn't repeat branch
-
-			//the block of ifs checks to see what mic was triggered and use that as 0 time
-			if(mic_use == 0)
-			{
-				if(MIC0_sample_count == SAMPLE_AVG_COUNT)
-				{
-				}
-				else
-				{
-					mic_check |= 1 << (MIC0_sample_count);
-					mic_time[mic_use][MIC0_sample_count] = 0;
-					MIC0_sample_count++;
-				}
-			}
-			else if(mic_use == 1)
-			{
-				if(MIC1_sample_count == SAMPLE_AVG_COUNT)
-				{
-				}
-				else
-				{
-					mic_check |= 1 << (MIC1_sample_count + 5);
-					mic_time[mic_use][MIC1_sample_count] = 0;
-					MIC1_sample_count++;
-				}
-			}
-			else if(mic_use == 2)
-			{
-				if(MIC2_sample_count == SAMPLE_AVG_COUNT)
-				{
-				}
-				else
-				{
-					mic_check |= 1 << (MIC2_sample_count + 10);
-					mic_time[mic_use][MIC2_sample_count] = 0;
-					MIC2_sample_count++;
-				}
-			}
-		}
-
-		else
-		{
-			if(mic_use == 0)
-			{
-				if(MIC0_sample_count < SAMPLE_AVG_COUNT)
-				{
-					mic_check |= 1 << (MIC0_sample_count);
-					mic_time[mic_use][MIC0_sample_count] = (unsigned int)TAR;
-					MIC0_sample_count++;
-				}
-			}
-			else if(mic_use == 1)
-			{
-				if(MIC1_sample_count < SAMPLE_AVG_COUNT)
-				{
-					mic_check |= 1 << (MIC1_sample_count + 5);
-					mic_time[mic_use][MIC1_sample_count] = (unsigned int)TAR;
-					MIC1_sample_count++;
-				}
-			}
-			else if(mic_use == 2)
-			{
-				if(MIC2_sample_count < SAMPLE_AVG_COUNT)
-				{
-					mic_check |= 1 << (MIC2_sample_count + 10);
-					mic_time[mic_use][MIC2_sample_count] = (unsigned int)TAR;
-					MIC2_sample_count++;
-				}
-			}
-
-		}
-	}
-}
