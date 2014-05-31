@@ -8,6 +8,9 @@
 #define MIC3 BIT3
 #define MIC4 BIT4
 
+#define SERVO_HORZ BIT0
+#define SERVO_VERT BIT1
+
 #define MIC_CAL 20
 #define ADC_THRES 900
 #define WIN_TIME 5
@@ -15,7 +18,9 @@
 
 #define ARRAY_LENGTH_ACTUAL 0.3 //length between mic in meters
 
-/* Timer runs at 8MHz to avoid overflow. Timer is an integer from 0->2^16 while mic_time is a float from 0->2^15
+/* Documentation:
+ *
+ * Timer runs at 8MHz to avoid overflow. Timer is an integer from 0->2^16 while mic_time is a float from 0->2^15
  *
  * P1.1 through P1.5 are the microphone inputs MIC0 through MIC4
  *
@@ -32,12 +37,17 @@
  * ENC = 1
  * ADC10SC = 1
  *
- * Takes 5 samples from each microphone then does radius/bearing calculation and averages the results
+ * Takes arbitrary samples from each microphone then does radius/bearing calculation and averages the results
  *
- * Radius is calculated as an integer in mm and the bearing is calculated as float in degrees
+ * Radius is calculated as an float in m and the bearing is calculated as float in degrees
  *
+ * Laser circuitry
+ *	Vcc = 5V
+ *	Green/White = GND
  *
  */
+
+
 unsigned int virgin_flag;
 unsigned int convert_flag;									//determines if ADC has converted value
 unsigned int MIC0_sample_count = 0;
@@ -74,6 +84,10 @@ int main(void)
 	BCSCTL1 = CALBC1_16MHZ;
 	DCOCTL = CALDCO_16MHZ;
 	_enable_interrupts();
+
+	PORT2 |= SERVO_HORZ + SERVO_VERT;
+
+	//Reset the servos
 
     virgin_flag = 1;
     convert_flag = 1;
@@ -210,6 +224,8 @@ int main(void)
 
     R_vert_avg = R_vert_avg / SAMPLE_AVG_COUNT;
 	B_vert_avg = B_vert_avg / SAMPLE_AVG_COUNT;
+
+	//Determine equation for time for servo
 
     while(1);
 
