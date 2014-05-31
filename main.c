@@ -11,7 +11,7 @@
 #define MIC_CAL 20
 #define ADC_THRES 900
 #define WIN_TIME 5
-#define SAMPLE_AVG_COUNT 3 		//number of samples to avg
+#define SAMPLE_AVG_COUNT 2 		//number of samples to avg
 
 #define ARRAY_LENGTH_ACTUAL 0.3 //length between mic in meters
 
