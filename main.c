@@ -11,8 +11,7 @@
 #define MIC_CAL 20
 #define ADC_THRES 900
 #define WIN_TIME 5
-#define SAMPLE_AVG_COUNT 5 		//number of samples to avg
-#define SAMPLE_AVG_COUNT_CALC 5
+#define SAMPLE_AVG_COUNT 3 		//number of samples to avg
 
 #define ARRAY_LENGTH_ACTUAL 0.3 //length between mic in meters
 
@@ -44,25 +43,32 @@ unsigned int convert_flag;									//determines if ADC has converted value
 unsigned int MIC0_sample_count = 0;
 unsigned int MIC1_sample_count = 0;
 unsigned int MIC2_sample_count = 0;
+unsigned int MIC3_sample_count = 0;
+unsigned int MIC4_sample_count = 0;
 
 volatile int mic_time[5][SAMPLE_AVG_COUNT];					//2D array, first dimension holds timing values from mic and second is for the multiple samples int mic_adc[5];
 unsigned int mic_check;										//BITN in mic_check is for MICN. Determines which MIC has a time value
+unsigned int mic_check_check;
+unsigned int mic_check_subcheck[5];
 unsigned int mic_use;										//vector that determines mic being used
 
-volatile int CD10[SAMPLE_AVG_COUNT], CD21[SAMPLE_AVG_COUNT];	//holy shit memory usage Batman!
+volatile int CD10_horz[SAMPLE_AVG_COUNT], CD21_horz[SAMPLE_AVG_COUNT];	//holy shit memory usage Batman!
 volatile float B_horz[SAMPLE_AVG_COUNT];
 volatile float R_horz[SAMPLE_AVG_COUNT];
 
+volatile int CD10_vert[SAMPLE_AVG_COUNT], CD21_vert[SAMPLE_AVG_COUNT];
+volatile float B_vert[SAMPLE_AVG_COUNT];
+volatile float R_vert[SAMPLE_AVG_COUNT];
+
+volatile float sound_speed,temperature_val,array_length;
+volatile float R_horz_avg,B_horz_avg;
+volatile float R_vert_avg,B_vert_avg;
+
 int acos_table[100] = {180,169,164,160,157,154,152,149,147,145,143,141,139,138,136,134,133,131,130,128,127,125,124,123,121,120,119,117,116,115,114,112,111,110,109,107,106,105,104,103,102,100,99,98,97,96,95,93,92,91,90,89,88,87,85,84,83,82,81,80,78,77,76,75,74,73,71,70,69,68,66,65,64,63,61,60,59,57,56,55,53,52,50,49,47,46,44,42,41,39,37,35,33,31,28,26,23,20,16,11};
 
-volatile float sound_speed,temperature_val,array_length,R_horz_avg,B_horz_avg;
-
-
-
-int main(void) {
-
+int main(void)
+{
 	unsigned int i;
-
 
     WDTCTL = WDTPW | WDTHOLD;						// Stop watchdog timer
 	BCSCTL1 = CALBC1_16MHZ;
@@ -76,6 +82,15 @@ int main(void) {
 
     TAR = 0x00;											//Clear TAR
 
+    for(i=0; i < SAMPLE_AVG_COUNT*5; i++)
+    {
+    	mic_check_check |= 1 << i;
+    }
+    for(i=0; i < SAMPLE_AVG_COUNT; i++)
+    {
+    	mic_check_subcheck[i] |= SAMPLE_AVG_COUNT << SAMPLE_AVG_COUNT*i;
+    }
+
     ADC10CTL1 |= ADC10SSEL_2;
     ADC10CTL0 |= ADC10IE /* + ADC10SHT_2 */;
     ADC10CTL0 |= ADC10ON;								//turn on the ADC and interrupts for it
@@ -85,10 +100,10 @@ int main(void) {
     //while(!(mic_check & 0x1F))						//when all bits in mic_check vector are set, exit while loop to continue
 
     //for 2 mic setup
-    while(mic_check != 0x7FFF)							//every 5 bits is is dedicated to 5 samples from each mic. 0x755 = 15 bits
+    while( mic_check != mic_check_check  )							//every 5 bits is is dedicated to 5 samples from each mic. 0x755 = 15 bits
     {
     	//Checking MIC0
-    	if(~(mic_check & 0x1F))							//0x1F is 5 bits, when all 5 samples have been taken mic_check4:0 will be high
+    	if(~(mic_check & mic_check_subcheck[0] ))							//0x1F is 5 bits, when all 5 samples have been taken mic_check4:0 will be high
     	{
     		mic_use = 0;
     		ADC10CTL0 |= ADC10SC+ENC;
@@ -97,7 +112,9 @@ int main(void) {
     	}
 
     	//Checking MIC1
-    	if(~(mic_check & 0x3E0))
+
+    	//HOLY FUCK HOW WILL WE DO THIS OSDFSKLF:SDF:LJDSL:SDFJ
+    	if(~(mic_check & mic_check_subcheck[1] ))
 		{
     		mic_use = 1;
     		ADC10CTL1 |= INCH_1;
@@ -108,7 +125,7 @@ int main(void) {
 		}
 
     	//Checking MIC2
-    	if(~(mic_check & 0x7C00))
+    	if(~(mic_check & mic_check_subcheck[2] ))
 		{
 			mic_use = 2;
 			ADC10CTL1 |= INCH_2;
@@ -116,6 +133,28 @@ int main(void) {
 			while(convert_flag);
 			convert_flag = 1;
 			ADC10CTL1 &= ~INCH_2;
+		}
+
+    	//Checking MIC3
+    	if(~(mic_check & mic_check_subcheck[3] ))
+		{
+			mic_use = 3;
+			ADC10CTL1 |= INCH_3;
+			ADC10CTL0 |= ADC10SC+ENC;;
+			while(convert_flag);
+			convert_flag = 1;
+			ADC10CTL1 &= ~INCH_3;
+		}
+
+    	//Checking MIC4
+    	if(~(mic_check & mic_check_subcheck[4] ))
+		{
+			mic_use = 4;
+			ADC10CTL1 |= INCH_4;
+			ADC10CTL0 |= ADC10SC+ENC;;
+			while(convert_flag);
+			convert_flag = 1;
+			ADC10CTL1 &= ~INCH_4;
 		}
 
     }
@@ -136,24 +175,41 @@ int main(void) {
     //INSERT LOOP TO CALCULATE RANGE AND BEARING FOR 5 SAMPLES
     for(i=0; i<SAMPLE_AVG_COUNT; i++)
     {
-    	CD10[i] = (mic_time[1][i]-mic_time[0][i]);
-    	CD21[i] = (mic_time[2][i]-mic_time[1][i]);
+    	CD10_horz[i] = (mic_time[1][i]-mic_time[0][i]);
+    	CD21_horz[i] = (mic_time[2][i]-mic_time[1][i]);
 
-        R_horz[i] =  ARRAY_LENGTH_ACTUAL * ( 1 - ( (CD10[i] / array_length ) * ( CD10[i] / array_length ) ) );
-    	R_horz[i] += ARRAY_LENGTH_ACTUAL * ( 1 - ( (CD21[i] / array_length ) * ( CD21[i] / array_length ) ) );
-    	R_horz[i] = R_horz[i] / fabs( 2 * ( ( CD21[i] / array_length ) - ( CD10[i] / array_length ) ) );
+        R_horz[i] =  ARRAY_LENGTH_ACTUAL * ( 1 - ( (CD10_horz[i] / array_length ) * ( CD10_horz[i] / array_length ) ) );
+    	R_horz[i] += ARRAY_LENGTH_ACTUAL * ( 1 - ( (CD21_horz[i] / array_length ) * ( CD21_horz[i] / array_length ) ) );
+    	R_horz[i] = R_horz[i] / fabs( 2 * ( ( CD21_horz[i] / array_length ) - ( CD10_horz[i] / array_length ) ) );
 
     	R_horz_avg += R_horz[i];
 
-    	B_horz[i] =( ARRAY_LENGTH_ACTUAL*ARRAY_LENGTH_ACTUAL - 2*R_horz[i]*CD21[i]/4000*sound_speed/2000 - CD21[i]/4000*343/2000*CD21[i]/4000*sound_speed/2000) / ( (2*R_horz[i]*ARRAY_LENGTH_ACTUAL) );
+    	B_horz[i] =( ARRAY_LENGTH_ACTUAL*ARRAY_LENGTH_ACTUAL - 2*R_horz[i]*CD21_horz[i]/4000*sound_speed/2000 - CD21_horz[i]/4000*343/2000*CD21_horz	[i]/4000*sound_speed/2000) / ( (2*R_horz[i]*ARRAY_LENGTH_ACTUAL) );
     	B_horz[i] = acos_table[ (int)( 100/2*( B_horz[i] + 1 ) )];
 
     	B_horz_avg += B_horz[i];
+
+    	CD10_vert[i] = (mic_time[1][i]-mic_time[3][i]);
+		CD21_vert[i] = (mic_time[4][i]-mic_time[1][i]);
+
+		R_vert[i] =  ARRAY_LENGTH_ACTUAL * ( 1 - ( (CD10_vert[i] / array_length ) * ( CD10_vert[i] / array_length ) ) );
+		R_vert[i] += ARRAY_LENGTH_ACTUAL * ( 1 - ( (CD21_vert[i] / array_length ) * ( CD21_vert[i] / array_length ) ) );
+		R_vert[i] = R_vert[i] / fabs( 2 * ( ( CD21_vert[i] / array_length ) - ( CD10_vert[i] / array_length ) ) );
+
+		R_vert_avg += R_vert[i];
+
+		B_vert[i] =( ARRAY_LENGTH_ACTUAL*ARRAY_LENGTH_ACTUAL - 2*R_vert[i]*CD21_vert[i]/4000*sound_speed/2000 - CD21_vert[i]/4000*343/2000*CD21_vert	[i]/4000*sound_speed/2000) / ( (2*R_vert[i]*ARRAY_LENGTH_ACTUAL) );
+		B_vert[i] = acos_table[ (int)( 100/2*( B_vert[i] + 1 ) )];
+
+		B_vert_avg += B_vert[i];
 
     }
 
     R_horz_avg = R_horz_avg / SAMPLE_AVG_COUNT;
     B_horz_avg = B_horz_avg / SAMPLE_AVG_COUNT;
+
+    R_vert_avg = R_vert_avg / SAMPLE_AVG_COUNT;
+	B_vert_avg = B_vert_avg / SAMPLE_AVG_COUNT;
 
     while(1);
 
@@ -204,7 +260,7 @@ __interrupt void adc_isr (void)
 				}
 				else
 				{
-					mic_check |= 1 << (MIC1_sample_count + 5);
+					mic_check |= 1 << (MIC1_sample_count + SAMPLE_AVG_COUNT);
 					mic_time[mic_use][MIC1_sample_count] = 0;
 					MIC1_sample_count++;
 				}
@@ -216,9 +272,33 @@ __interrupt void adc_isr (void)
 				}
 				else
 				{
-					mic_check |= 1 << (MIC2_sample_count + 10);
+					mic_check |= 1 << (MIC2_sample_count + SAMPLE_AVG_COUNT*2);
 					mic_time[mic_use][MIC2_sample_count] = 0;
 					MIC2_sample_count++;
+				}
+			}
+			else if(mic_use == 3)
+			{
+				if(MIC3_sample_count == SAMPLE_AVG_COUNT)
+				{
+				}
+				else
+				{
+					mic_check |= 1 << (MIC3_sample_count + SAMPLE_AVG_COUNT*3);
+					mic_time[mic_use][MIC3_sample_count] = 0;
+					MIC3_sample_count++;
+				}
+			}
+			else if(mic_use == 4)
+			{
+				if(MIC3_sample_count == SAMPLE_AVG_COUNT)
+				{
+				}
+				else
+				{
+					mic_check |= 1 << (MIC4_sample_count + SAMPLE_AVG_COUNT*4);
+					mic_time[mic_use][MIC4_sample_count] = 0;
+					MIC4_sample_count++;
 				}
 			}
 		}
@@ -238,7 +318,7 @@ __interrupt void adc_isr (void)
 			{
 				if(MIC1_sample_count < SAMPLE_AVG_COUNT)
 				{
-					mic_check |= 1 << (MIC1_sample_count + 5);
+					mic_check |= 1 << (MIC1_sample_count + SAMPLE_AVG_COUNT );
 					mic_time[mic_use][MIC1_sample_count] = TAR;
 					MIC1_sample_count++;
 				}
@@ -247,12 +327,29 @@ __interrupt void adc_isr (void)
 			{
 				if(MIC2_sample_count < SAMPLE_AVG_COUNT)
 				{
-					mic_check |= 1 << (MIC2_sample_count + 10);
+					mic_check |= 1 << (MIC2_sample_count + SAMPLE_AVG_COUNT*2 );
 					mic_time[mic_use][MIC2_sample_count] = TAR;
 					MIC2_sample_count++;
 				}
 			}
-
+			else if(mic_use == 3)
+			{
+				if(MIC3_sample_count < SAMPLE_AVG_COUNT)
+				{
+					mic_check |= 1 << (MIC3_sample_count + SAMPLE_AVG_COUNT*3 );
+					mic_time[mic_use][MIC3_sample_count] = TAR;
+					MIC3_sample_count++;
+				}
+			}
+			else if(mic_use == 4)
+			{
+				if(MIC4_sample_count < SAMPLE_AVG_COUNT)
+				{
+					mic_check |= 1 << (MIC4_sample_count + SAMPLE_AVG_COUNT * 4);
+					mic_time[mic_use][MIC4_sample_count] = TAR;
+					MIC4_sample_count++;
+				}
+			}
 		}
 	}
 }
