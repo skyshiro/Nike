@@ -55,9 +55,9 @@ volatile float R_horz[SAMPLE_AVG_COUNT];
 
 int acos_table[100] = {180,169,164,160,157,154,152,149,147,145,143,141,139,138,136,134,133,131,130,128,127,125,124,123,121,120,119,117,116,115,114,112,111,110,109,107,106,105,104,103,102,100,99,98,97,96,95,93,92,91,90,89,88,87,85,84,83,82,81,80,78,77,76,75,74,73,71,70,69,68,66,65,64,63,61,60,59,57,56,55,53,52,50,49,47,46,44,42,41,39,37,35,33,31,28,26,23,20,16,11};
 
-volatile float sound_speed;
-volatile float temperature_val;
-volatile float array_length;
+volatile float sound_speed,temperature_val,array_length,R_horz_avg,B_horz_avg;
+
+
 
 int main(void) {
 
@@ -130,6 +130,9 @@ int main(void) {
 
 	array_length = ARRAY_LENGTH_ACTUAL * 4000 / sound_speed * 2000;
 
+	R_horz_avg = 0;
+	B_horz_avg = 0;
+
     //INSERT LOOP TO CALCULATE RANGE AND BEARING FOR 5 SAMPLES
     for(i=0; i<SAMPLE_AVG_COUNT; i++)
     {
@@ -140,10 +143,17 @@ int main(void) {
     	R_horz[i] += ARRAY_LENGTH_ACTUAL * ( 1 - ( (CD21[i] / array_length ) * ( CD21[i] / array_length ) ) );
     	R_horz[i] = R_horz[i] / fabs( 2 * ( ( CD21[i] / array_length ) - ( CD10[i] / array_length ) ) );
 
+    	R_horz_avg += R_horz[i];
+
     	B_horz[i] =( ARRAY_LENGTH_ACTUAL*ARRAY_LENGTH_ACTUAL - 2*R_horz[i]*CD21[i]/4000*sound_speed/2000 - CD21[i]/4000*343/2000*CD21[i]/4000*sound_speed/2000) / ( (2*R_horz[i]*ARRAY_LENGTH_ACTUAL) );
     	B_horz[i] = acos_table[ (int)( 100/2*( B_horz[i] + 1 ) )];
 
+    	B_horz_avg += B_horz[i];
+
     }
+
+    R_horz_avg = R_horz_avg / SAMPLE_AVG_COUNT;
+    B_horz_avg = B_horz_avg / SAMPLE_AVG_COUNT;
 
     while(1);
 
@@ -168,11 +178,12 @@ __interrupt void adc_isr (void)
 		if(virgin_flag)
 		{
 			//turn on the timer
-			TACTL = TASSEL_2 + MC_2 + ID_1;                 // SMCLK, continous mode @ 16MHz
+			TACTL = TASSEL_2 + MC_2 + ID_1;         // SMCLK, continous mode @ 16MHz
 
 			virgin_flag = 0;						//turn off flag so program doesn't repeat branch
 
 			//the switch checks to see what mic was triggered and use that as 0 time
+			//if it aint broke dont fix it
 
 			if(mic_use == 0)
 			{
