@@ -10,6 +10,8 @@
 
 #define SERVO_HORZ BIT0
 #define SERVO_VERT BIT1
+#define SERVO_RST 9600
+#define SERVO_WAIT 75
 
 #define MIC_CAL 20
 #define ADC_THRES 900
@@ -76,18 +78,35 @@ volatile float R_vert_avg,B_vert_avg;
 
 int acos_table[100] = {180,169,164,160,157,154,152,149,147,145,143,141,139,138,136,134,133,131,130,128,127,125,124,123,121,120,119,117,116,115,114,112,111,110,109,107,106,105,104,103,102,100,99,98,97,96,95,93,92,91,90,89,88,87,85,84,83,82,81,80,78,77,76,75,74,73,71,70,69,68,66,65,64,63,61,60,59,57,56,55,53,52,50,49,47,46,44,42,41,39,37,35,33,31,28,26,23,20,16,11};
 
+unsigned int servo_low, servo_time_horz, servo_time_vert;
+
 int main(void)
 {
-	unsigned int i;
+	unsigned int i,k,j;
 
     WDTCTL = WDTPW | WDTHOLD;						// Stop watchdog timer
 	BCSCTL1 = CALBC1_16MHZ;
 	DCOCTL = CALDCO_16MHZ;
 	_enable_interrupts();
 
-	PORT2 |= SERVO_HORZ + SERVO_VERT;
+	P2DIR |= SERVO_HORZ + SERVO_VERT;
 
 	//Reset the servos
+	for(i=0; i < SERVO_WAIT; i++)
+	{
+		P2OUT |= SERVO_HORZ + SERVO_VERT;
+
+		__delay_cycles(SERVO_RST);
+
+		servo_low = (20 - SERVO_RST/4000.0/4000.0)*16;
+
+		P2OUT &= ~(SERVO_HORZ + SERVO_VERT);
+
+		for(k=0; k < servo_low; k++)
+		{
+			__delay_cycles(1000);
+		}
+	}
 
     virgin_flag = 1;
     convert_flag = 1;
@@ -225,7 +244,52 @@ int main(void)
     R_vert_avg = R_vert_avg / SAMPLE_AVG_COUNT;
 	B_vert_avg = B_vert_avg / SAMPLE_AVG_COUNT;
 
-	//Determine equation for time for servo
+	servo_time_horz = (B_horz_avg/100 + 0.6) * 16;
+	servo_time_vert = (B_vert_avg/100 + 0.6) * 16;
+
+	servo_low = 320 - servo_time_horz;
+
+	//Changes the horizontal servo
+	for(i=0; i < SERVO_WAIT; i++)
+	{
+		P2OUT |= SERVO_HORZ;
+
+		for(k=0; k < servo_time_horz; k++)
+		{
+			__delay_cycles(1000);
+		}
+
+		P2OUT &= ~(SERVO_HORZ);
+
+		for(k=0; k < servo_low; k++)
+		{
+			__delay_cycles(1000);
+		}
+	}
+
+	P2OUT &= ~(SERVO_HORZ);
+
+	servo_low = 320 - servo_time_vert;
+
+	//Changes the vertical servo
+	for(i=0; i < SERVO_WAIT; i++)
+	{
+		P2OUT |= SERVO_VERT;
+
+		for(k=0; k < servo_time_vert; k++)
+		{
+			__delay_cycles(1000);
+		}
+
+		P2OUT &= ~(SERVO_VERT);
+
+		for(k=0; k < servo_low; k++)
+		{
+			__delay_cycles(1000);
+		}
+	}
+
+	P2OUT &= ~(SERVO_VERT);
 
     while(1);
 
