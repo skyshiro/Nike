@@ -75,9 +75,16 @@ volatile float sound_speed,temperature_val,array_length;
 volatile float R_horz_avg,B_horz_avg;
 volatile float R_vert_avg,B_vert_avg;
 
-int acos_table[100] = {180,169,164,160,157,154,152,149,147,145,143,141,139,138,136,134,133,131,130,128,127,125,124,123,121,120,119,117,116,115,114,112,111,110,109,107,106,105,104,103,102,100,99,98,97,96,95,93,92,91,90,89,88,87,85,84,83,82,81,80,78,77,76,75,74,73,71,70,69,68,66,65,64,63,61,60,59,57,56,55,53,52,50,49,47,46,44,42,41,39,37,35,33,31,28,26,23,20,16,11};
+//acos in degrees
+const int acos_table[100] = {180,169,164,160,157,154,152,149,147,145,143,141,139,138,136,134,133,131,130,128,127,125,124,123,121,120,119,117,116,115,114,112,111,110,109,107,106,105,104,103,102,100,99,98,97,96,95,93,92,91,90,89,88,87,85,84,83,82,81,80,78,77,76,75,74,73,71,70,69,68,66,65,64,63,61,60,59,57,56,55,53,52,50,49,47,46,44,42,41,39,37,35,33,31,28,26,23,20,16,11};
+//atan in millidegrees
+const int atan_table[100] = {573,682,791,899,1008,1117,1226,1335,1444,1552,1661,1770,1879,1987,2096,2205,2313,2422,2531,2639,2748,2857,2965,3074,3182,3291,3399,3508,3616,3725,3833,3941,4050,4158,4266,4375,4483,4591,4699,4807,4915,5023,5131,5239,5347,5455,5563,5671,5779,5886,5994,6102,6209,6317,6424,6532,6639,6747,6854,6961,7069,7176,7283,7390,7497,7604,7711,7818,7925,8031,8138,8245,8351,8458,8564,8671,8777,8883,8990,9096,9202,9308,9414,9520,9626,9732,9837,9943,10049,10154,10259,10365,10470,10575,10681,10786,10891,10996,11100,11205};
+//cos in milliradius
+const int cos_table[25] = {1000,969,876,729,536,309,63,-187,-426,-637,-809,-930,-992,-992,-930,-809,-637,-426,-187,63,309,536,729,876,969};
+//sin in milliradius
+const int sin_table[25] = {0,249,482,685,844,951,998,982,905,771,588,368,125,-125,-368,-588,-771,-905,-982,-998,-951,-844,-685,-482,-249};
 
-unsigned int servo_low, servo_high_horz, servo_high_vert, servo_low_horz, servo_low_vert;
+unsigned int circle_flag = 0,servo_low, servo_high_horz, servo_high_vert, servo_low_horz, servo_low_vert;
 
 int main(void)
 {
@@ -89,6 +96,11 @@ int main(void)
 	_enable_interrupts();
 
 	P2DIR |= SERVO_HORZ + SERVO_VERT;
+
+	TACTL |= TASSEL_2 + TAIE;
+	TACCR0 = 1000;
+
+	//TACTL |= MC_1;						//set before the delay
 
 	//Reset the servos
 	for(i=0; i < SERVO_WAIT; i++)
@@ -144,6 +156,12 @@ int main(void)
 
 		while( mic_check != mic_check_check  )				//when all bits in mic_check vector are set, exit while loop to continue
 		{
+			//insert servo circular code and determine optimal menacing frequency
+			if(circle_flag)
+			{
+				//CIRCLE CIRCLE CIRCLE
+			}
+
 			//Checking MIC0
 			if(~(mic_check & mic_check_subcheck[0] ))		//0x1F is 5 bits, when all 5 samples have been taken mic_check4:0 will be high
 			{
@@ -255,56 +273,151 @@ int main(void)
 		servo_low_horz = 320 - servo_high_horz;
 		servo_low_vert = 320 - servo_high_vert;
 
-		//Changes the horizontal servo
-		for(i=0; i < SERVO_WAIT; i++)
-		{
-			P2OUT |= SERVO_HORZ;
+		circle_flag = 1;
 
-			for(k=0; k < servo_high_horz; k++)
+		//if the horz time is longer than vert, move vert first
+		if(servo_high_horz > servo_high_vert)
+		{
+			//move both till horz needs to move more
+			for(i=0; i < SERVO_WAIT; i++)
 			{
-				__delay_cycles(1000);
+				P2OUT |= SERVO_HORZ + SERVO_VERT;
+
+				for(k=0; k < servo_high_vert; k++)
+				{
+					__delay_cycles(1000);
+				}
+
+				P2OUT &= ~(SERVO_HORZ + SERVO_VERT);
+
+				for(k=0; k < servo_low_vert; k++)
+				{
+					__delay_cycles(1000);
+				}
+			}
+			//move horz the additional distance
+			for(i=0; i < SERVO_WAIT; i++)
+			{
+				P2OUT |= SERVO_HORZ;
+
+				for(k=0; k < servo_high_horz; k++)
+				{
+					__delay_cycles(1000);
+				}
+
+				P2OUT &= ~(SERVO_HORZ);
+
+				for(k=0; k < servo_low_horz; k++)
+				{
+					__delay_cycles(1000);
+				}
+			}
+		}
+		//opposite of above
+		else
+		{
+			for(i=0; i < SERVO_WAIT; i++)
+			{
+				P2OUT |= SERVO_HORZ + SERVO_VERT;
+
+				for(k=0; k < servo_high_horz; k++)
+				{
+					__delay_cycles(1000);
+				}
+
+				P2OUT &= ~(SERVO_HORZ + SERVO_VERT);
+
+				for(k=0; k < servo_low_horz; k++)
+				{
+					__delay_cycles(1000);
+				}
 			}
 
-			P2OUT &= ~(SERVO_HORZ);
-
-			for(k=0; k < servo_low; k++)
+			for(i=0; i < SERVO_WAIT; i++)
 			{
-				__delay_cycles(1000);
+				P2OUT |= SERVO_VERT;
+
+				for(k=0; k < servo_high_vert; k++)
+				{
+					__delay_cycles(1000);
+				}
+
+				P2OUT &= ~(SERVO_VERT);
+
+				for(k=0; k < servo_low_vert; k++)
+				{
+					__delay_cycles(1000);
+				}
 			}
 		}
 
-		P2OUT &= ~(SERVO_HORZ);
+		P2OUT &= ~(SERVO_HORZ + SERVO_VERT);
 
-		//Changes the vertical servo
-		for(i=0; i < SERVO_WAIT; i++)
+		servo_high_horz = (B_horz_avg/100 + 0.6) * 16;
+		servo_high_vert = (B_vert_avg/100 + 0.6) * 16;
+
+		servo_low_horz = 320 - servo_high_horz;
+		servo_low_vert = 320 - servo_high_vert;
+
+		float R_avg = (R_horz_avg + R_vert_avg)/2;
+
+		int time_index;
+		float r_ratio = .05/R_avg, arctan_const;
+
+		arctan_const = atan_table[(int)(100/.19*(r_ratio - .01))] / 1000.0;
+
+		while(1)
 		{
-			P2OUT |= SERVO_VERT;
-
-			for(k=0; k < servo_high_vert; k++)
+			for( time_index = 0; time_index < 25; time_index++)
 			{
-				__delay_cycles(1000);
-			}
+				servo_high_horz = ( (B_horz_avg + (arctan_const * cos_table[i] ) )/100 + 0.6) * 16;
+				servo_low_horz = 320 - servo_high_horz;
 
-			P2OUT &= ~(SERVO_VERT);
+				servo_high_vert = ((B_vert_avg + (arctan_const * sin_table[i] ) )/100 + 0.6) * 16;
+				servo_low_vert = 320 - servo_high_vert;
 
-			for(k=0; k < servo_low; k++)
-			{
+
+				P2OUT |= SERVO_HORZ;
+
 				__delay_cycles(1000);
+
+				P2OUT &= ~(SERVO_HORZ);
+
+				__delay_cycles(1000);
+
+
+				P2OUT &= ~SERVO_HORZ;
+
+
+
+				P2OUT |= SERVO_VERT;
+
+
+				__delay_cycles(1000);
+
+
+				P2OUT &= ~(SERVO_VERT);
+
+
+				__delay_cycles(1000);
+
+
+				P2OUT &= ~SERVO_VERT;
 			}
 		}
-
-		P2OUT &= ~(SERVO_VERT);
-
     }
 
-    //insert the swivel
-
-    //move theta1 till theta2 then continue for theta1-theta2
-
-	return 0;
+    return 0;
 }
 
-
+//ISR for Timer
+#pragma vector=TIMER0_A1_vector
+__interrupt void timer_isr (void)
+{
+	//set the servo change flag
+	TACTL &= ~MC_1;
+	TAR = 0;
+}
 
 //ISR for ADC
 #pragma vector=ADC10_VECTOR
