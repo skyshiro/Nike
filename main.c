@@ -85,16 +85,17 @@ const int cos_table[25] = {1000,969,876,729,536,309,63,-187,-426,-637,-809,-930,
 //sin in milliradius
 const int sin_table[25] = {0,249,482,685,844,951,998,982,905,771,588,368,125,-125,-368,-588,-771,-905,-982,-998,-951,-844,-685,-482,-249};
 
-unsigned int circle_flag = 0,servo_low, servo_high_horz, servo_high_vert, servo_low_horz, servo_low_vert;
+unsigned int circle_flag = 0,servo_low, servo_high_horz, servo_high_vert, servo_low_horz, servo_low_vert,servo_flag;
 
 
 int time_index,r_ratio;
 int SSR_flag, B_horz_avg_count = 0, B_vert_avg_count = 0;
 float arctan_const, B_avg = 0;
+unsigned int gate_1 = 0, gate_2 = 0, gate_3=0, gate_4 =0;
 
 int main(void)
 {
-	unsigned int i,k;
+	unsigned int i,k,j,l;
 
     WDTCTL = WDTPW | WDTHOLD;						// Stop watchdog timer
 	BCSCTL1 = CALBC1_16MHZ;
@@ -103,7 +104,7 @@ int main(void)
 
 	P2DIR |= SERVO_HORZ + SERVO_VERT;
 
-	TACTL |= TASSEL_2 + TAIE;
+	TACTL |= TASSEL_2 + TAIE;						//use master clock and turn on interrupts
 	TACCR0 = 1000;
 
 	//TACTL |= MC_1;						//set before the delay
@@ -162,13 +163,71 @@ int main(void)
 
 		while( mic_check != mic_check_check  )				//when all bits in mic_check vector are set, exit while loop to continue
 		{
-			/**
+
 			//insert servo circular code and determine optimal menacing frequency
 			if(circle_flag)
 			{
-				//CIRCLE CIRCLE CIRCLE
+				if(servo_flag)
+				{
+					servo_flag = 0;
+
+					for( time_index = 0; time_index < 25; time_index++)
+					{
+						servo_high_horz = ( (B_horz_avg + (arctan_const * cos_table[time_index]/1000.0 ) )/100 + 0.6) * 16;
+						servo_low_horz = 320 - servo_high_horz;
+
+						servo_high_vert = ((B_vert_avg + (arctan_const * sin_table[time_index]/1000.0 ) )/100 + 0.6) * 16;
+						servo_low_vert = 320 - servo_high_vert;
+
+						for(i=0 ; i < SSC_COUNT ; i++)
+						{
+							P2OUT |= SERVO_HORZ;
+
+							for(k=0; k < servo_high_horz; k++)
+							{
+								//use for loops to check how many times timer ISR has occured to determine if it
+								TACTL |= MC_1;
+								k++;
+
+							if(k == servo_high_horz)
+							{
+								P2OUT &= ~(SERVO_HORZ);
+
+								for(k=0; k < servo_low_horz; k++)
+								{
+									TACTL |= MC_1;
+								}
+
+
+								P2OUT &= ~SERVO_HORZ;
+
+								for(i=0 ; i < SSC_COUNT ; i++)
+								{
+									P2OUT |= SERVO_VERT;
+
+									for(k=0; k < servo_high_vert; k++)
+									{
+										__delay_cycles(1000);
+									}
+
+									P2OUT &= ~(SERVO_VERT);
+
+									for(k=0; k < servo_low_vert; k++)
+									{
+										__delay_cycles(1000);
+									}
+								}
+
+								P2OUT &= ~SERVO_VERT;
+							}
+
+							}
+
+
+					}
+				}
 			}
-			**/
+
 
 			//Checking MIC0
 			if(~(mic_check & mic_check_subcheck[0] ))		//0x1F is 5 bits, when all 5 samples have been taken mic_check4:0 will be high
@@ -270,6 +329,7 @@ int main(void)
 
 		}
 
+		//Gets ride of useless angles in samples
 		SSR_flag = 0;
 
 		for(i = 0; i < SAMPLE_AVG_COUNT; i++)
@@ -327,8 +387,6 @@ int main(void)
 
 		servo_low_horz = 320 - servo_high_horz;
 		servo_low_vert = 320 - servo_high_vert;
-
-		circle_flag = 1;
 
 		//if the horz time is longer than vert, move vert first
 		if(servo_high_horz > servo_high_vert)
@@ -416,66 +474,18 @@ int main(void)
 
 		r_ratio = 50/R_horz_avg;
 		arctan_const = atan_table[(int)(0.5263*(r_ratio - 10))] / 1000.0;
-
-		while(1)
-		{
-			for( time_index = 0; time_index < 25; time_index++)
-			{
-				servo_high_horz = ( (B_horz_avg + (arctan_const * cos_table[time_index]/1000.0 ) )/100 + 0.6) * 16;
-				servo_low_horz = 320 - servo_high_horz;
-
-				servo_high_vert = ((B_vert_avg + (arctan_const * sin_table[time_index]/1000.0 ) )/100 + 0.6) * 16;
-				servo_low_vert = 320 - servo_high_vert;
-
-				for(i=0 ; i < SSC_COUNT ; i++)
-				{
-					P2OUT |= SERVO_HORZ;
-
-					for(k=0; k < servo_high_horz; k++)
-					{
-						__delay_cycles(1000);
-					}
-
-					P2OUT &= ~(SERVO_HORZ);
-
-					for(k=0; k < servo_low_horz; k++)
-					{
-						__delay_cycles(1000);
-					}
-				}
-
-				P2OUT &= ~SERVO_HORZ;
-
-				for(i=0 ; i < SSC_COUNT ; i++)
-				{
-					P2OUT |= SERVO_VERT;
-
-					for(k=0; k < servo_high_vert; k++)
-					{
-						__delay_cycles(1000);
-					}
-
-					P2OUT &= ~(SERVO_VERT);
-
-					for(k=0; k < servo_low_vert; k++)
-					{
-						__delay_cycles(1000);
-					}
-				}
-
-				P2OUT &= ~SERVO_VERT;
-			}
-		}
+		circle_flag = 1;
+		TACTL |= MC_1;								//turn on timer to begin circle routine
     }
 
     return 0;
 }
 
 //ISR for Timer
-#pragma vector=TIMER0_A1_vector
+#pragma vector=TIMER0_A1_VECTOR
 __interrupt void timer_isr (void)
 {
-	//set the servo change flag
+	servo_flag = 1;
 	TACTL &= ~MC_1;
 	TAR = 0;
 }
