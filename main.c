@@ -12,6 +12,7 @@
 #define SERVO_VERT BIT1
 #define SERVO_RST 9600
 #define SERVO_WAIT 75
+#define SSC_COUNT 1
 
 #define MIC_CAL 20
 #define ADC_THRES 900
@@ -87,9 +88,9 @@ const int sin_table[25] = {0,249,482,685,844,951,998,982,905,771,588,368,125,-12
 unsigned int circle_flag = 0,servo_low, servo_high_horz, servo_high_vert, servo_low_horz, servo_low_vert;
 
 
-int time_index;
-int r_ratio;
-float arctan_const;
+int time_index,r_ratio;
+int SSR_flag, B_horz_avg_count = 0, B_vert_avg_count = 0;
+float arctan_const, B_avg = 0;
 
 int main(void)
 {
@@ -231,8 +232,9 @@ int main(void)
 		TAR = 0x00;
 
 		R_horz_avg = 0;
-		B_horz_avg = 0;
 		R_vert_avg = 0;
+
+		B_horz_avg = 0;
 		B_vert_avg = 0;
 
 		//INSERT LOOP TO CALCULATE RANGE AND BEARING FOR 5 SAMPLES
@@ -268,11 +270,57 @@ int main(void)
 
 		}
 
-		R_horz_avg = R_horz_avg / SAMPLE_AVG_COUNT;
-		B_horz_avg = B_horz_avg / SAMPLE_AVG_COUNT;
+		SSR_flag = 0;
 
+		for(i = 0; i < SAMPLE_AVG_COUNT; i++)
+		{
+			if( (B_vert[i] > 180) || (B_horz[i] > 180) )
+			{
+				SSR_flag = 1;
+			}
+		}
+
+		if(SSR_flag)
+		{
+			B_horz_avg = 0.0;
+			B_vert_avg = 0.0;
+
+			for(i = 0; i < SAMPLE_AVG_COUNT; i++)
+			{
+				B_avg += B_horz[i];
+				B_avg += B_vert[i];
+			}
+
+			B_avg /= SAMPLE_AVG_COUNT*2;
+
+			for(i = 0; i < SAMPLE_AVG_COUNT; i++)
+			{
+				if( B_horz[i] < B_avg)
+				{
+					B_horz_avg_count++;
+					B_horz_avg += B_horz[i];
+				}
+
+				if( B_vert[i] < B_avg)
+				{
+					B_vert_avg_count++;
+					B_vert_avg += B_vert[i];
+				}
+			}
+
+			B_vert_avg = B_vert_avg/B_vert_avg_count;
+			B_horz_avg = B_horz_avg/B_horz_avg_count;
+
+		}
+
+		else
+		{
+			B_horz_avg = B_horz_avg / SAMPLE_AVG_COUNT;
+			B_vert_avg = B_vert_avg / SAMPLE_AVG_COUNT;
+		}
+
+		R_horz_avg = R_horz_avg / SAMPLE_AVG_COUNT;
 		R_vert_avg = R_vert_avg / SAMPLE_AVG_COUNT;
-		B_vert_avg = B_vert_avg / SAMPLE_AVG_COUNT;
 
 		servo_high_horz = (B_horz_avg/100 + 0.6) * 16;
 		servo_high_vert = (B_vert_avg/100 + 0.6) * 16;
@@ -379,7 +427,7 @@ int main(void)
 				servo_high_vert = ((B_vert_avg + (arctan_const * sin_table[time_index]/1000.0 ) )/100 + 0.6) * 16;
 				servo_low_vert = 320 - servo_high_vert;
 
-				for(i=0 ; i < 2 ; i++)
+				for(i=0 ; i < SSC_COUNT ; i++)
 				{
 					P2OUT |= SERVO_HORZ;
 
@@ -398,7 +446,7 @@ int main(void)
 
 				P2OUT &= ~SERVO_HORZ;
 
-				for(i=0 ; i < 2 ; i++)
+				for(i=0 ; i < SSC_COUNT ; i++)
 				{
 					P2OUT |= SERVO_VERT;
 
