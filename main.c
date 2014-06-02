@@ -86,6 +86,11 @@ const int sin_table[25] = {0,249,482,685,844,951,998,982,905,771,588,368,125,-12
 
 unsigned int circle_flag = 0,servo_low, servo_high_horz, servo_high_vert, servo_low_horz, servo_low_vert;
 
+
+int time_index;
+int r_ratio;
+float arctan_const;
+
 int main(void)
 {
 	unsigned int i,k;
@@ -156,11 +161,13 @@ int main(void)
 
 		while( mic_check != mic_check_check  )				//when all bits in mic_check vector are set, exit while loop to continue
 		{
+			/**
 			//insert servo circular code and determine optimal menacing frequency
 			if(circle_flag)
 			{
 				//CIRCLE CIRCLE CIRCLE
 			}
+			**/
 
 			//Checking MIC0
 			if(~(mic_check & mic_check_subcheck[0] ))		//0x1F is 5 bits, when all 5 samples have been taken mic_check4:0 will be high
@@ -359,48 +366,54 @@ int main(void)
 		servo_low_horz = 320 - servo_high_horz;
 		servo_low_vert = 320 - servo_high_vert;
 
-		float R_avg = (R_horz_avg + R_vert_avg)/2;
-
-		int time_index;
-		float r_ratio = .05/R_avg, arctan_const;
-
-		arctan_const = atan_table[(int)(100/.19*(r_ratio - .01))] / 1000.0;
+		r_ratio = 50/R_horz_avg;
+		arctan_const = atan_table[(int)(0.5263*(r_ratio - 10))] / 1000.0;
 
 		while(1)
 		{
 			for( time_index = 0; time_index < 25; time_index++)
 			{
-				servo_high_horz = ( (B_horz_avg + (arctan_const * cos_table[i] ) )/100 + 0.6) * 16;
+				servo_high_horz = ( (B_horz_avg + (arctan_const * cos_table[time_index]/1000.0 ) )/100 + 0.6) * 16;
 				servo_low_horz = 320 - servo_high_horz;
 
-				servo_high_vert = ((B_vert_avg + (arctan_const * sin_table[i] ) )/100 + 0.6) * 16;
+				servo_high_vert = ((B_vert_avg + (arctan_const * sin_table[time_index]/1000.0 ) )/100 + 0.6) * 16;
 				servo_low_vert = 320 - servo_high_vert;
 
+				for(i=0 ; i < 2 ; i++)
+				{
+					P2OUT |= SERVO_HORZ;
 
-				P2OUT |= SERVO_HORZ;
+					for(k=0; k < servo_high_horz; k++)
+					{
+						__delay_cycles(1000);
+					}
 
-				__delay_cycles(1000);
+					P2OUT &= ~(SERVO_HORZ);
 
-				P2OUT &= ~(SERVO_HORZ);
-
-				__delay_cycles(1000);
-
+					for(k=0; k < servo_low_horz; k++)
+					{
+						__delay_cycles(1000);
+					}
+				}
 
 				P2OUT &= ~SERVO_HORZ;
 
+				for(i=0 ; i < 2 ; i++)
+				{
+					P2OUT |= SERVO_VERT;
 
+					for(k=0; k < servo_high_vert; k++)
+					{
+						__delay_cycles(1000);
+					}
 
-				P2OUT |= SERVO_VERT;
+					P2OUT &= ~(SERVO_VERT);
 
-
-				__delay_cycles(1000);
-
-
-				P2OUT &= ~(SERVO_VERT);
-
-
-				__delay_cycles(1000);
-
+					for(k=0; k < servo_low_vert; k++)
+					{
+						__delay_cycles(1000);
+					}
+				}
 
 				P2OUT &= ~SERVO_VERT;
 			}
