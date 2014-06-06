@@ -10,8 +10,10 @@
 
 #define SERVO_HORZ BIT0
 #define SERVO_VERT BIT1
+#define BUTTON BIT2
 #define SERVO_RST 9600
-#define SERVO_WAIT 75
+#define SERVO_WAIT 27	//servo takes .17sec/60degrees. So for 180 degrees takes 0.51sec w/ .02 period per command ~= 27
+
 #define SSC_COUNT 1
 
 #define MIC_CAL 20
@@ -85,12 +87,15 @@ const int cos_table[25] = {1000,969,876,729,536,309,63,-187,-426,-637,-809,-930,
 //sin in milliradius
 const int sin_table[25] = {0,249,482,685,844,951,998,982,905,771,588,368,125,-125,-368,-588,-771,-905,-982,-998,-951,-844,-685,-482,-249};
 
-unsigned int circle_flag = 0,servo_low, servo_high_horz, servo_high_vert, servo_low_horz, servo_low_vert;
+unsigned int circle_flag = 0,servo_low, servo_high_horz, servo_high_vert, servo_low_horz, servo_low_vert,servo_flag;
 
 
 int time_index,r_ratio;
 int SSR_flag, B_horz_avg_count = 0, B_vert_avg_count = 0;
 float arctan_const, B_avg = 0;
+unsigned int gate_1 = 0, gate_2 = 0, gate_3=0, gate_4 =0;
+
+int delay_track,time_flag,horz_flag,vert_flag;
 
 int main(void)
 {
@@ -103,10 +108,14 @@ int main(void)
 
 	P2DIR |= SERVO_HORZ + SERVO_VERT;
 
-	TACTL |= TASSEL_2 + TAIE;
-	TACCR0 = 1000;
+	TA1CTL |= TASSEL_1 + TAIE;						//use master clock and turn on interrupts
+	TA1CCR0 = 1000;
+	TA1R = 0x00;
 
-	//TACTL |= MC_1;						//set before the delay
+	ADC10CTL1 |= ADC10SSEL_2;
+	ADC10CTL0 |= ADC10IE /* + ADC10SHT_2 */;
+
+	//TACTL |= MC_2;						//set before the delay
 
 	//Reset the servos
 	for(i=0; i < SERVO_WAIT; i++)
@@ -142,11 +151,6 @@ int main(void)
 	sound_speed = 0.606 * temperature_val + 331.3;
 	array_length = ARRAY_LENGTH_ACTUAL * 4000 / sound_speed * 2000;
 
-	TAR = 0x00;
-
-	ADC10CTL1 |= ADC10SSEL_2;
-	ADC10CTL0 |= ADC10IE /* + ADC10SHT_2 */;
-
     while(1)
     {
     	MIC0_sample_count = 0;
@@ -162,13 +166,92 @@ int main(void)
 
 		while( mic_check != mic_check_check  )				//when all bits in mic_check vector are set, exit while loop to continue
 		{
-			/**
+
 			//insert servo circular code and determine optimal menacing frequency
 			if(circle_flag)
 			{
-				//CIRCLE CIRCLE CIRCLE
+				if(servo_flag)
+				{
+					servo_flag = 0;
+					TA1CTL |= TAIE;
+
+					if(time_flag)
+					{
+						if(time_index == 24)
+						{
+							time_index = 0;
+						}
+
+						servo_high_horz = ( (B_horz_avg + (arctan_const * cos_table[time_index]/1000.0 ) )/100 + 0.6) * 16;
+						servo_low_horz = 320 - servo_high_horz;
+
+						servo_high_vert = ((B_vert_avg + (arctan_const * sin_table[time_index]/1000.0 ) )/100 + 0.6) * 16;
+						servo_low_vert = 320 - servo_high_vert;
+
+						time_index++;
+
+						horz_flag = 1;
+						time_flag = 0;
+						vert_flag = 0;
+						delay_track = 0;
+					}
+
+					if(horz_flag)
+					{
+						TA1CTL |= MC_2;
+						delay_track++;
+
+						if(delay_track < servo_high_horz)
+						{
+							P2OUT |= SERVO_HORZ;
+						}
+						else
+						{
+							P2OUT &= ~(SERVO_HORZ);
+						}
+
+						if(delay_track == 320)
+						{
+							TA1CTL &= ~MC_2;
+							TA1R = 0;
+
+							P2OUT &= ~(SERVO_HORZ);
+							delay_track = 0;
+							horz_flag = 0;
+							time_flag = 0;
+							vert_flag = 1;
+						}
+					}
+
+					if(vert_flag)
+					{
+						TA1CTL |= MC_2;
+						delay_track++;
+
+						if(delay_track < servo_high_vert)
+						{
+							P2OUT |= SERVO_VERT;
+						}
+						else
+						{
+							P2OUT &= ~(SERVO_VERT);
+						}
+
+						if(delay_track == 320)
+						{
+							TA1CTL &= ~MC_2;
+							TA1R = 0;
+
+							P2OUT &= ~(SERVO_VERT);
+							delay_track = 0;
+							horz_flag = 0;
+							vert_flag = 0;
+							time_flag = 1;
+						}
+					}
+				}
 			}
-			**/
+
 
 			//Checking MIC0
 			if(~(mic_check & mic_check_subcheck[0] ))		//0x1F is 5 bits, when all 5 samples have been taken mic_check4:0 will be high
@@ -229,6 +312,7 @@ int main(void)
 
 		ADC10CTL0 &= ~ADC10ON;					//turn off ADC when done filling with values
 		TACTL &= ~MC_2;							//turn off timer and clear TAR
+		TA1CTL &= ~MC_2;
 		TAR = 0x00;
 
 		R_horz_avg = 0;
@@ -270,6 +354,7 @@ int main(void)
 
 		}
 
+		//Gets ride of useless angles in samples
 		SSR_flag = 0;
 
 		for(i = 0; i < SAMPLE_AVG_COUNT; i++)
@@ -327,8 +412,6 @@ int main(void)
 
 		servo_low_horz = 320 - servo_high_horz;
 		servo_low_vert = 320 - servo_high_vert;
-
-		circle_flag = 1;
 
 		//if the horz time is longer than vert, move vert first
 		if(servo_high_horz > servo_high_vert)
@@ -416,68 +499,25 @@ int main(void)
 
 		r_ratio = 50/R_horz_avg;
 		arctan_const = atan_table[(int)(0.5263*(r_ratio - 10))] / 1000.0;
-
-		while(1)
-		{
-			for( time_index = 0; time_index < 25; time_index++)
-			{
-				servo_high_horz = ( (B_horz_avg + (arctan_const * cos_table[time_index]/1000.0 ) )/100 + 0.6) * 16;
-				servo_low_horz = 320 - servo_high_horz;
-
-				servo_high_vert = ((B_vert_avg + (arctan_const * sin_table[time_index]/1000.0 ) )/100 + 0.6) * 16;
-				servo_low_vert = 320 - servo_high_vert;
-
-				for(i=0 ; i < SSC_COUNT ; i++)
-				{
-					P2OUT |= SERVO_HORZ;
-
-					for(k=0; k < servo_high_horz; k++)
-					{
-						__delay_cycles(1000);
-					}
-
-					P2OUT &= ~(SERVO_HORZ);
-
-					for(k=0; k < servo_low_horz; k++)
-					{
-						__delay_cycles(1000);
-					}
-				}
-
-				P2OUT &= ~SERVO_HORZ;
-
-				for(i=0 ; i < SSC_COUNT ; i++)
-				{
-					P2OUT |= SERVO_VERT;
-
-					for(k=0; k < servo_high_vert; k++)
-					{
-						__delay_cycles(1000);
-					}
-
-					P2OUT &= ~(SERVO_VERT);
-
-					for(k=0; k < servo_low_vert; k++)
-					{
-						__delay_cycles(1000);
-					}
-				}
-
-				P2OUT &= ~SERVO_VERT;
-			}
-		}
+		circle_flag = 1;
+		time_index = 0;
+		servo_flag = 1;
+		time_flag = 1;
     }
 
     return 0;
 }
 
 //ISR for Timer
-#pragma vector=TIMER0_A1_vector
+//gets stuck in timer ISR
+#pragma vector=TIMER1_A1_VECTOR
 __interrupt void timer_isr (void)
 {
-	//set the servo change flag
-	TACTL &= ~MC_1;
-	TAR = 0;
+	servo_flag = 1;
+	TA1R = 0;
+	TA1CTL &= ~(TAIE + MC_2);
+	TA1CTL &= ~TAIFG;
+
 }
 
 //ISR for ADC
@@ -496,7 +536,7 @@ __interrupt void adc_isr (void)
 		if(virgin_flag)
 		{
 			//turn on the timer
-			TACTL |= TASSEL_2 + MC_2 + ID_1;         // SMCLK, continous mode @ 16MHz
+			TACTL |= TASSEL_2 + MC_2 + ID_1;         // SMCLK, continous mode @ 8MHz
 
 			virgin_flag = 0;						//turn off flag so program doesn't repeat branch
 
@@ -615,4 +655,3 @@ __interrupt void adc_isr (void)
 		}
 	}
 }
-
